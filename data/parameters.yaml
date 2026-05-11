@@ -1,0 +1,116 @@
+{
+  "metadata": {
+    "schema_version": "1.0",
+    "created_on": "2026-04-30",
+    "source_workbook": "source_data_tables",
+    "source_design_note": "docs/model_description.md",
+    "description": "Machine-readable input package for the China erenumab chronic migraine pharmacoeconomic model.",
+    "encoding_note": "This file is JSON-compatible YAML so it can be parsed without PyYAML."
+  },
+  "model": {
+    "perspective": "China health system direct medical cost",
+    "currency": "CNY",
+    "cycle_length_weeks": 4,
+    "total_cycles": 13,
+    "decision_tree_cycles": 3,
+    "maintenance_cycles": 10,
+    "time_horizon_weeks": 52,
+    "discount_rate_annual": 0.0,
+    "wtp_1x_gdp_cny_per_qaly": 99665,
+    "wtp_3x_gdp_cny_per_qaly": 298995,
+    "main_outcome": "ICER_CNY_per_QALY"
+  },
+  "arms": {
+    "intervention": "erenumab_plus_bsc",
+    "comparator": "bsc"
+  },
+  "treatments": {
+    "erenumab_plus_bsc": {
+      "name_cn": "Erenumab preventive treatment",
+      "erenumab_dose_mg": 70,
+      "dosing_interval_weeks": 4,
+      "includes_erenumab": true,
+      "includes_bsc": true
+    },
+    "bsc": {
+      "name_cn": "No preventive treatment",
+      "includes_erenumab": false,
+      "includes_bsc": true
+    }
+  },
+  "baseline_mmd_distribution": {
+    "distribution": "truncated_normal",
+    "mean_interpretation": "post_truncation_theoretical_mean",
+    "mean": 19.2,
+    "sd_interpretation": "post_truncation_theoretical_sd",
+    "sd": 5.4,
+    "lower": 8,
+    "upper": 28,
+    "owsa_mean_lower": 17.28,
+    "owsa_mean_upper": 20.6,
+    "owsa_sd_lower": 4.32,
+    "owsa_sd_upper": 5.6,
+    "n_simulated_patients": 100000,
+    "random_seed": 314159,
+    "source_id": "S_DRAGON"
+  },
+  "calibration_targets": {
+    "erenumab_plus_bsc": {
+      "mean_mmd_week12": 11.0,
+      "responder50_week12": 0.470,
+      "mmd_lt15_week12": 0.523,
+      "source_id": "S_DRAGON;S_DRAGON_POSTHOC"
+    },
+    "bsc": {
+      "mean_mmd_week12": 12.6,
+      "responder50_week12": 0.367,
+      "mmd_lt15_week12": 0.410,
+      "source_id": "S_DRAGON;S_DRAGON_POSTHOC"
+    },
+    "note": "mmd_lt15_week12 uses CM-to-EM from the DRAGON post hoc analysis as an approximation; original endpoint was based on monthly headache days."
+  },
+  "acute_medication": {
+    "interpolation_method_basecase": "linear_baseline_to_week12",
+    "cycle_cost_formula": "acute_med_days * weighted_acute_rescue_daily_cost_cny",
+    "weighted_daily_cost_table": "acute_rescue_drug_costs",
+    "weighted_daily_cost_status": "derived",
+    "cost_parameter_id": "acute_medication_cost_per_day"
+  },
+  "discontinuation": {
+    "short_term_rule": "disc_allcause_12w",
+    "short_term_application": "spread_over_first_3_cycles",
+    "maintenance_rule": "disc_allcause_64w",
+    "post_discontinuation_cost_rule": "bsc_cost_only",
+    "post_discontinuation_utility_rule_basecase": "maintenance_effect_decays_by_extra_long_term_discontinuation",
+    "post_discontinuation_acute_medication_rule_basecase": "maintenance_acute_medication_days_decay_by_extra_long_term_discontinuation",
+    "maintenance_decay_formula": "q(k)=max(0,[1-(1-p_long)^k]-[1-(1-p_short)^k]); erenumab MMD and acute-medication days move toward No preventive treatment by q(k) after Week 12"
+  },
+  "costing": {
+    "erenumab_cost_rule_basecase": "one_70mg_box_per_4w_while_on_treatment",
+    "bsc_cost_rule_basecase": "acute_rescue_cost_plus_non_drug_medical_service_cost",
+    "acute_rescue_cost_formula": "acute_medication_days * acute_medication_cost_per_day",
+    "non_drug_medical_service_cost_parameter_id": "non_drug_medical_service_cost_per_4w_2025",
+    "include_acute_rescue_medication_cost_basecase": true,
+    "include_ae_cost_basecase": false
+  },
+  "medical_service_cpi_adjustment": {
+    "base_year": 2017,
+    "target_year": 2025,
+    "index_table": "medical_service_cpi",
+    "adjustment_factor_2017_to_2025": 1.1485098963,
+    "source_id": "S_MEDICAL_SERVICE_CPI"
+  },
+  "data_files": {
+    "mmd_states": "mmd_states.csv",
+    "clinical_trajectory": "clinical_trajectory.csv",
+    "acute_medication_days": "acute_medication_days.csv",
+    "acute_rescue_drug_costs": "acute_rescue_drug_costs.csv",
+    "medical_service_cpi": "medical_service_cpi.csv",
+    "discontinuation_parameters": "discontinuation_parameters.csv",
+    "cost_parameters": "cost_parameters.csv",
+    "scenario_settings": "scenario_settings.csv",
+    "psa_parameters": "psa_parameters.csv",
+    "calibration_parameters": "calibration_parameters.csv",
+    "sources": "sources.csv"
+  }
+}

@@ -1,0 +1,41 @@
+parameter_id,category,base_value,unit,distribution_or_range,source_id,use_in_model,notes
+cycle_length_weeks,model_structure,4,weeks,fixed,S_SCENARIO_WORKBOOK,cycle_length,Four-week cycles
+total_cycles,model_structure,13,cycles,fixed,S_SCENARIO_WORKBOOK,time_horizon,Base-case 52-week horizon
+decision_tree_cycles,model_structure,3,cycles,fixed,S_SCENARIO_WORKBOOK,short_term_period,Weeks 0-12
+maintenance_cycles,model_structure,10,cycles,fixed,S_SCENARIO_WORKBOOK,maintenance_period,Weeks 12-52
+discount_rate_annual,model_structure,0,proportion,fixed,S_SCENARIO_WORKBOOK,discounting,One-year horizon
+wtp_1x_gdp_cny_per_qaly,threshold,99665,CNY/QALY,fixed,S_SCENARIO_WORKBOOK,NMB,One-times GDP per capita threshold
+wtp_3x_gdp_cny_per_qaly,threshold,298995,CNY/QALY,fixed,S_SCENARIO_WORKBOOK,NMB,Three-times GDP per capita threshold
+baseline_mmd_mean,baseline_mmd,19.2,days per 4 weeks,OWSA 17.28 to 20.6,S_DRAGON,baseline_sampling,Post-truncation theoretical mean
+baseline_mmd_sd,baseline_mmd,5.4,days per 4 weeks,OWSA 4.32 to 5.6,S_DRAGON,baseline_sampling,Post-truncation theoretical standard deviation
+baseline_mmd_lower,baseline_mmd,8,days per 4 weeks,fixed,S_DRAGON,baseline_sampling,Lower truncation bound
+baseline_mmd_upper,baseline_mmd,28,days per 4 weeks,fixed,S_DRAGON,baseline_sampling,Upper truncation bound
+mmd_change_w4_erenumab,clinical_trajectory,-6.0,days per 4 weeks,fixed,S_DRAGON_SUPP,short_term_mmd,Observed Week 4 MMD change
+mmd_change_w4_bsc,clinical_trajectory,-3.4,days per 4 weeks,fixed,S_DRAGON_SUPP,short_term_mmd,Observed Week 4 MMD change
+mmd_change_w8_erenumab,clinical_trajectory,-7.4,days per 4 weeks,fixed,S_DRAGON_SUPP,short_term_mmd,Observed Week 8 MMD change
+mmd_change_w8_bsc,clinical_trajectory,-5.4,days per 4 weeks,fixed,S_DRAGON_SUPP,short_term_mmd,Observed Week 8 MMD change
+mmd_change_w12_erenumab,clinical_trajectory,-8.2,days per 4 weeks,normal SE 0.5,S_DRAGON,week12_calibration,OWSA efficacy driver for erenumab
+mmd_change_w12_bsc,clinical_trajectory,-6.6,days per 4 weeks,normal SE 0.5,S_DRAGON,week12_calibration,OWSA efficacy driver for comparator
+responder50_w12_erenumab,calibration_target,0.470,proportion,beta 131 148,S_DRAGON,week12_calibration,PSA calibration target
+responder50_w12_bsc,calibration_target,0.367,proportion,beta 102 176,S_DRAGON,week12_calibration,PSA calibration target
+mmd_lt15_w12_erenumab,calibration_target,0.523,proportion,beta 146 133,S_DRAGON_POSTHOC,week12_calibration,PSA calibration target
+mmd_lt15_w12_bsc,calibration_target,0.410,proportion,beta 114 164,S_DRAGON_POSTHOC,week12_calibration,PSA calibration target
+acute_med_days_baseline,acute_medication,14.30,days per 4 weeks,fixed,S_DRAGON,acute_rescue_cost,Common pooled baseline
+acute_med_days_w12_erenumab,acute_medication,8.96,days per 4 weeks,fixed,S_DRAGON,acute_rescue_cost,Week 12 value from pooled baseline minus observed change
+acute_med_days_w12_bsc,acute_medication,9.64,days per 4 weeks,fixed,S_DRAGON,acute_rescue_cost,Week 12 value from pooled baseline minus observed change
+erenumab_price_per_4w,cost,3498,CNY per 70 mg box,OWSA +/-20%; threshold scenario,S_PRICE_ERE,drug_cost,One box per 4-week cycle while on treatment
+acute_medication_cost_per_day,cost,31.749900,CNY/day,gamma PSA; range 28.066126 to 36.391239,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,acute_rescue_cost,Weighted from acute rescue category proportions and daily costs
+non_drug_medical_service_cost_per_4w_2025,cost,6.212423,CNY per 4 weeks,gamma PSA,S_CHIRA;S_MEDICAL_SERVICE_CPI,non_drug_cost,Derived from annual 2025 cost divided by 13 cycles
+chira_diagnosis_nondrug_cost_usd,cost_source,10.5,USD/year,fixed,S_CHIRA,non_drug_cost,Source component before exchange-rate conversion and CPI adjustment
+chira_exchange_rate,cost_source,6.697,CNY/USD,fixed,S_CHIRA,non_drug_cost,Exchange-rate conversion
+medical_service_cpi_adjustment_2017_to_2025,cost_source,1.1485098963,multiplier,fixed,S_MEDICAL_SERVICE_CPI,non_drug_cost,CPI inflation factor
+disc_allcause_12w,discontinuation,0.021505,proportion,beta 6 273; OWSA +/-20%,S_DRAGON,short_term_discontinuation,Converted to 4-week probability 0.007220
+disc_allcause_64w,discontinuation,0.259,proportion,beta 158 451; OWSA +/-20%,S_OLE_64W,maintenance_discontinuation,158/609 discontinued over the 64-week total study period in the Tepper 52-week open-label extension study; converted to 4-week probability 0.018560
+utility_0_3,utility,0.71,QALY weight,beta-PERT range 0.60 to 0.82,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
+utility_4_9,utility,0.61,QALY weight,beta-PERT range 0.50 to 0.72,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
+utility_10_14,utility,0.57,QALY weight,beta-PERT range 0.46 to 0.68,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
+utility_15_19,utility,0.50,QALY weight,beta-PERT range 0.40 to 0.60,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
+utility_20_23,utility,0.48,QALY weight,beta-PERT range 0.38 to 0.58,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
+utility_24_28,utility,0.38,QALY weight,beta-PERT range 0.28 to 0.48,S_US_CE,utility_mapping,Retained from previous 24-30 MMD state
+cal_week12_erenumab,calibration_parameter,see data/calibration_parameters.csv,multiple,frozen,S_MODEL_CALIBRATION,week12_calibration,Continuous calibration parameters for erenumab arm
+cal_week12_bsc,calibration_parameter,see data/calibration_parameters.csv,multiple,frozen,S_MODEL_CALIBRATION,week12_calibration,Continuous calibration parameters for comparator arm

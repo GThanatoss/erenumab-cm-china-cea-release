@@ -1,0 +1,7 @@
+parameter_id,drug_category_cn,proportion,avg_cost_per_prescription_cny,cost_share,representative_drug,daily_cost_cny,lower,upper,source_id,status,notes
+acute_nsaids,NSAIDs,0.287457697,25.53,0.1135,Ibuprofen,1.731922,0.316,9.96,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,sourced,Huang 2024 Table 2/3/Fig 2; representative drug daily cost from the market price table
+acute_caffeine,Caffeine-containing analgesics,0.227156189,11.63,0.0408,Fenka tablet,11.36333,2.16,16.05,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,sourced,Huang 2024 Table 2/3/Fig 2; representative drug daily cost from the market price table
+acute_opioids,Opioids,0.164085735,77.29,0.1961,Acetaminophen-dihydrocodeine tablet,10.57158,4.563,12.78,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,sourced,Huang 2024 Table 2/3/Fig 2; representative drug daily cost from the market price table
+acute_acetaminophen,Acetaminophen,0.018972413,9.81,0.0029,Acetaminophen,0.512153,0.2236,2.065,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,sourced,Huang 2024 Table 2/3/Fig 2; representative drug daily cost from the market price table
+acute_triptans,Triptans,0.267869962,150.22,0.6221,Rizatriptan benzoate,99.76,99.76,99.76,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,sourced,Huang 2024 Table 2/3/Fig 2; representative drug daily cost from the market price table
+acute_antiemetics,Antiemetics,0.034458004,20.61,0.0110,Metoclopramide hydrochloride injection,5.912273,0.26,29.7,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,sourced,Huang 2024 Table 2/3/Fig 2; representative drug daily cost from the market price table

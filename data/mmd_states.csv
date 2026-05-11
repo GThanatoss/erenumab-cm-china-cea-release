@@ -1,0 +1,7 @@
+state_id,state_name,lower_bound,upper_bound,representative_mmd,utility,calibration_start_erenumab,calibration_start_bsc,source_id,notes
+S1,0-3 MMD,0,3,1.5,0.71,0.100,0.060,S_US_CE;S_STATE_CALIBRATION_START,Deep response state; utility is international MMD-stratified value
+S2,4-9 MMD,4,9,6.5,0.61,0.370,0.307,S_US_CE;S_STATE_CALIBRATION_START,Approximate responder state
+S3,10-14 MMD,10,14,12.0,0.57,0.053,0.043,S_US_CE;S_STATE_CALIBRATION_START,EM but not necessarily 50 percent responder
+S4,15-19 MMD,15,19,16.0,0.50,0.430,0.477,S_US_CE;S_STATE_CALIBRATION_START,CM residual burden state
+S5,20-23 MMD,20,23,20.0,0.48,0.040,0.093,S_US_CE;S_STATE_CALIBRATION_START,High MMD residual burden state
+S6,24-28 MMD,24,28,25.0,0.38,0.007,0.020,S_US_CE;S_STATE_CALIBRATION_START,Very high MMD residual burden state; utility retained from previous 24-30 MMD state

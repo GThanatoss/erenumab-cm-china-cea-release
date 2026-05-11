@@ -1,0 +1,8 @@
+parameter_id,name_cn,value,unit,lower,upper,distribution_or_handling,use_in_model,source_id,status,notes
+erenumab_price_per_4w,Erenumab 70 mg box price,3498,CNY/70mg box,2798.4,4197.6,OWSA +/-20%; fixed in PSA; threshold scenario separately,erenumab_drug_cost,S_PRICE_ERE,base_case_assumption,Base case assumes one 70mg box per 4-week cycle
+chira_diagnosis_nondrug_cost_usd,CHIRA diagnosis and non-drug medical service cost,10.5,USD/year,,,source_component,non_drug_medical_service_cost,S_CHIRA,sourced,2016-2017 CHIRA diagnosis and non-drug cost
+chira_exchange_rate,CHIRA exchange rate,6.697,CNY/USD,,,source_component,currency_conversion,S_CHIRA,sourced,Exchange rate used to convert CHIRA non-drug cost to CNY
+medical_service_cpi_adjustment_2017_to_2025,Medical service CPI adjustment factor 2017 to 2025,1.1485098963,multiplier,1.0,1.5,fixed,cost_year_adjustment,S_MEDICAL_SERVICE_CPI,sourced,Product of 2018-2025 medical service CPI indices divided by 100
+non_drug_medical_service_cost_annual_2025,2025 non-drug medical service cost,80.761493,CNY/year,,,formula,non_drug_medical_service_cost,S_CHIRA;S_MEDICAL_SERVICE_CPI,derived,10.5 * 6.697 * 1.1485098963
+non_drug_medical_service_cost_per_4w_2025,2025 non-drug medical service cost per 4 weeks,6.212423,CNY/4w,,,formula,non_drug_medical_service_cost,S_CHIRA;S_MEDICAL_SERVICE_CPI,derived,80.761493 / 13 cycles
+acute_medication_cost_per_day,Weighted daily acute medication cost,31.749900,CNY/day,28.066126,36.391239,derived_from_acute_rescue_drug_costs,acute_rescue_medication_cost,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,derived,Formula: sum(proportion * daily_cost_cny) from acute_rescue_drug_costs.csv; lower/upper use same proportions and representative daily cost lower/upper

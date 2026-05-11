@@ -1,0 +1,5 @@
+timepoint,week,arm,acute_med_days,change_from_baseline,source_id,notes
+baseline,0,erenumab_plus_bsc,14.30,0,S_DRAGON,Common pooled baseline acute headache medication days from all patients
+baseline,0,bsc,14.30,0,S_DRAGON,Common pooled baseline acute headache medication days from all patients
+week12,12,erenumab_plus_bsc,8.96,-5.34,S_DRAGON,Week 12 value calculated as pooled baseline 14.30 - 5.34
+week12,12,bsc,9.64,-4.66,S_DRAGON,Week 12 value calculated as pooled baseline 14.30 - 4.66

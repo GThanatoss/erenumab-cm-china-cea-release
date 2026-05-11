@@ -1,0 +1,9 @@
+record_type,timepoint,cycle,week,arm,baseline_mmd,mmd_change,absolute_mmd,se,source_id,notes
+observed,baseline,0,0,erenumab_plus_bsc,19.2,0,19.2,,S_DRAGON,Unified baseline MMD
+observed,baseline,0,0,bsc,19.2,0,19.2,,S_DRAGON,Unified baseline MMD
+observed,week4,1,4,erenumab_plus_bsc,19.2,-6.0,13.2,0.52,S_DRAGON_SUPP,DRAGON supplementary table 4
+observed,week4,1,4,bsc,19.2,-3.4,15.8,0.52,S_DRAGON_SUPP,DRAGON supplementary table 4
+observed,week8,2,8,erenumab_plus_bsc,19.2,-7.4,11.8,0.58,S_DRAGON_SUPP,DRAGON supplementary table 4
+observed,week8,2,8,bsc,19.2,-5.4,13.8,0.58,S_DRAGON_SUPP,DRAGON supplementary table 4
+observed,week12,3,12,erenumab_plus_bsc,19.2,-8.2,11.0,0.64,S_DRAGON,Week 12 endpoint
+observed,week12,3,12,bsc,19.2,-6.6,12.6,0.64,S_DRAGON,Week 12 endpoint

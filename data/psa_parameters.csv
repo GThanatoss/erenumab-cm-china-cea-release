@@ -1,0 +1,15 @@
+parameter_id,name_cn,base_value,distribution,param1,param2,se_sd,lower,upper,source_id,notes
+mmd_change_w12_erenumab,Week 12 MMD change(Erenumab preventive treatment),-8.2,normal,-8.2,,0.5,,,S_DRAGON,DRAGON SE; OWSA uses this as the only Week 12 efficacy driver for erenumab
+mmd_change_w12_bsc,Week 12 MMD change(No preventive treatment),-6.6,normal,-6.6,,0.5,,,S_DRAGON,DRAGON SE; OWSA uses this as the only Week 12 efficacy driver for BSC
+responder50_w12_erenumab,Week 12 >=50% MMD responder rate(Erenumab preventive treatment),0.47,beta,131,148,,,,S_DRAGON,Used in PSA recalibration target; not varied separately in OWSA
+responder50_w12_bsc,Week 12 >=50% MMD responder rate(No preventive treatment),0.367,beta,102,176,,,,S_DRAGON,Used in PSA recalibration target; not varied separately in OWSA
+mmd_lt15_w12_erenumab,Week 12 MMD<15 proportion(Erenumab preventive treatment),0.523,beta,146,133,,,,S_DRAGON_POSTHOC,Used in PSA recalibration target; not varied separately in OWSA
+mmd_lt15_w12_bsc,Week 12 MMD<15 proportion(No preventive treatment),0.41,beta,114,164,,,,S_DRAGON_POSTHOC,Used in PSA recalibration target; not varied separately in OWSA
+disc_allcause_12w,0-12 week double-blind all-cause discontinuation rate,0.021505,beta,6,273,,0.017204,0.025806,S_DRAGON,6/279 discontinued during the double-blind treatment period; OWSA range uses +/-20%
+disc_allcause_64w,Long-term all-cause discontinuation from Tepper open-label extension study,0.259,beta,158,451,,0.2072,0.3108,S_OLE_64W,158/609 discontinued over the 64-week total study period (12-week double-blind phase plus 52-week open-label extension); OWSA range uses +/-20%
+utility_0_3,0-3 MMD utility,0.71,beta,,,,0.6,0.82,S_US_CE,Range-based because SE is unavailable
+utility_4_9,4-9 MMD utility,0.61,beta,,,,0.5,0.72,S_US_CE,Range-based because SE is unavailable
+utility_10_14,10-14 MMD utility,0.57,beta,,,,0.46,0.68,S_US_CE,Range-based because SE is unavailable
+utility_15_19,15-19 MMD utility,0.5,beta,,,,0.4,0.6,S_US_CE,Range-based because SE is unavailable
+utility_20_23,20-23 MMD utility,0.48,beta,,,,0.38,0.58,S_US_CE,Range-based because SE is unavailable
+utility_24_28,24-28 MMD utility,0.38,beta,,,,0.28,0.48,S_US_CE,Range-based because SE is unavailable; value and range retained from previous 24-30 MMD state
