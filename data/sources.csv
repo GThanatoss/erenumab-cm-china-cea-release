@@ -1,14 +1,14 @@
-source_id,source_name_cn,source_type,detail,local_or_url,reliability,needs_final_verification,notes
-S_DRAGON,DRAGON phase 3 trial,clinical_trial,baseline Week4/8/12 MMD responder AE,https://doi.org/10.1186/s10194-022-01514-9,high,no,Primary short-term efficacy and safety source
-S_DRAGON_SUPP,DRAGON supplementary material,supplement,Week4/8 trajectory,DRAGON supplementary table,high,no,Supplementary table used for Week 4 and Week 8 MMD change
-S_DRAGON_POSTHOC,DRAGON post hoc analysis,post_hoc,CM to EM proportions,https://doi.org/10.1111/head.14733,medium_high,no,CM to EM endpoint is based on monthly headache days and is used as an approximation for MMD<15
-S_OLE_64W,Tepper erenumab 52-week open-label extension study,long_term_study,all-cause discontinuation reported over the 64-week total study period (12-week double-blind phase plus 52-week open-label extension),https://doi.org/10.1177/0333102420912726,medium,no,Used for maintenance discontinuation because China long-term persistence data are unavailable
-S_US_CE,Sussman 2018 US erenumab cost-effectiveness model,economic_model,MMD states and utilities,https://doi.org/10.1177/0333102418796842,medium,no,Utility and MMD state structure source; US costs are not used
-S_CHIRA,CHIRA cost study,cost_study,diagnosis and non-drug outpatient cost plus exchange rate,https://doi.org/10.1186/s10194-020-01117-2,high,no,2016-2017 Chinese claims cost data; only diagnosis/non-drug component is used
-S_HUANG_2024,Huang 2024 Chinese anti-migraine prescription trend study,prescription_cost_study,acute rescue medication mix average prescription costs and cost shares,https://doi.org/10.1186/s10194-024-01775-6,high,no,Used for acute rescue medication category proportions
-S_REPRESENTATIVE_DAILY_COSTS,Representative daily drug cost table,representative_market_price_table,representative daily cost lower/base/upper values for acute rescue medication categories,Representative market price table,medium,yes,Used to parameterize daily_cost_cny lower and upper in acute_rescue_drug_costs.csv
-S_MEDICAL_SERVICE_CPI,Consumer price index for medical services,price_index,2018-2025 annual medical service CPI index values,CEICDATA.COM/National Bureau of Statistics summary input,medium,yes,Used to adjust CHIRA diagnosis and non-drug medical service cost from 2017 to 2025
-S_PRICE_ERE,Erenumab 70 mg box price,base_case_unit_price_assumption,3498 CNY per 70mg box; base case assumes one box per 4-week cycle,Base-case unit price,medium,no,Base-case erenumab unit price used in the model
-S_STATE_CALIBRATION_START,Legacy state-distribution calibration starting values,workbook_calibration,initial editable proportions from source data table,Source data table,medium,yes,Legacy state-distribution calibration support only; not used by the current continuous main analysis
-S_SCENARIO_WORKBOOK,Base-case structure settings,workbook_settings,base-case structure from source data table,Source data table,medium,no,Only the implemented base-case row is retained in scenario_settings.csv
-S_MODEL_CALIBRATION,Frozen Week 12 calibration parameters,model_generated_calibration,calibration parameters generated from current model inputs by calibrate_model.py,./calibration_parameters.csv,medium,no,Locked for routine runs; rerun calibration after changing baseline MMD distribution or Week 12 calibration targets
+source_id,reference
+S_DRAGON,https://doi.org/10.1186/s10194-022-01514-9
+S_DRAGON_SUPP,Supplementary material to https://doi.org/10.1186/s10194-022-01514-9
+S_DRAGON_POSTHOC,https://doi.org/10.1111/head.14733
+S_OLE_52W,https://doi.org/10.1177/0333102420912726
+S_US_CE,https://doi.org/10.1177/0333102418796842
+S_CHIRA,https://doi.org/10.1186/s10194-020-01117-2
+S_HUANG_2024,https://doi.org/10.1186/s10194-024-01775-6
+S_REPRESENTATIVE_DAILY_COSTS,Representative market price table
+S_MEDICAL_SERVICE_CPI,https://data.stats.gov.cn/
+S_PRICE_ERE,"Base-case unit price assumption (CNY 3,498 per 70 mg box)"
+S_SCENARIO_WORKBOOK,Model structural assumption
+S_STRUCTURAL_ASSUMPTION,Model structural assumption
+S_MODEL_CALIBRATION,Model-generated calibration

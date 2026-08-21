@@ -9,8 +9,9 @@ import pandas as pd
 from scipy.stats import beta as beta_dist
 from scipy.stats import gamma as gamma_dist
 
+from .calibration import CalibrationResult, calibrate_continuous_target_weight
 from .data import ModelInputs, cost_range, cost_value
-from .simulation import SimulationSettings, run_basecase_simulation
+from .simulation import SimulationSettings, _baseline_mmd, run_basecase_simulation
 from .utilities import beta_pert_sample, clip_nonnegative, clip_probability
 
 
@@ -107,23 +108,252 @@ def run_time_horizon_scenarios(
     results.insert(2, "time_horizon_weeks", inputs.decision_tree_cycles * inputs.cycle_length_weeks)
     results.insert(3, "total_cycles", inputs.decision_tree_cycles)
 
-    legacy_settings = SimulationSettings(
+    immediate_settings = SimulationSettings(
         n_patients=n_patients,
         seed=seed,
-        scenario_id="legacy_state_calibration",
-        calibration_mode="recalibrate",
+        scenario_id="immediate_post_discontinuation_loss",
+        calibration_mode=calibration_mode,
     )
-    legacy_output = run_basecase_simulation(
+    immediate_output = run_basecase_simulation(
         inputs,
-        legacy_settings,
-        overrides={"_use_state_calibration": True},
+        immediate_settings,
+        overrides={"_retention_profile": []},
     )
-    legacy_results = legacy_output.results.copy()
-    legacy_results.insert(0, "scenario_id", "legacy_state_calibration")
-    legacy_results.insert(1, "scenario_name", "Legacy state-distribution calibration")
-    legacy_results.insert(2, "time_horizon_weeks", inputs.time_horizon_weeks)
-    legacy_results.insert(3, "total_cycles", inputs.total_cycles)
-    return pd.concat([results, legacy_results], ignore_index=True)
+    immediate_results = immediate_output.results.copy()
+    immediate_results.insert(0, "scenario_id", "immediate_post_discontinuation_loss")
+    immediate_results.insert(1, "scenario_name", "Immediate post-discontinuation loss of incremental benefit")
+    immediate_results.insert(2, "time_horizon_weeks", inputs.time_horizon_weeks)
+    immediate_results.insert(3, "total_cycles", inputs.total_cycles)
+
+    return pd.concat([results, immediate_results], ignore_index=True)
+
+
+def _calibration_draw_seed(inputs: ModelInputs, arm: str) -> int:
+    rows = inputs.calibration_parameters.loc[inputs.calibration_parameters["arm"] == arm]
+    if rows.empty:
+        raise KeyError(f"Missing frozen calibration row for {arm}")
+    row = rows.iloc[0]
+    return int(row.get("continuous_draw_seed") or row.get("calibration_seed") or 314159)
+
+
+def _calibration_robustness_row(
+    inputs: ModelInputs,
+    analysis_id: str,
+    analysis_type: str,
+    mmd_lt15_weight: float,
+    calibration_results: dict[str, CalibrationResult],
+    model_output,
+    screening_n_patients: int | None,
+    mean_tolerance: float,
+    responder_tolerance: float,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "analysis_id": analysis_id,
+        "analysis_type": analysis_type,
+        "mmd_lt15_objective_weight": float(mmd_lt15_weight),
+        "screening_n_patients": (
+            np.nan if screening_n_patients is None else int(screening_n_patients)
+        ),
+        "evaluation_n_patients": int(len(model_output.baseline_mmd)),
+        "primary_mean_mmd_tolerance": float(mean_tolerance),
+        "primary_responder50_tolerance": float(responder_tolerance),
+    }
+    compatible = True
+    for prefix, arm in (
+        ("erenumab", inputs.intervention_arm),
+        ("comparator", inputs.comparator_arm),
+    ):
+        result = calibration_results[arm]
+        mean_residual = result.mean_mmd_week12 - result.target_mean_mmd_week12
+        responder_residual = result.responder50_week12 - result.target_responder50_week12
+        mmd_lt15_residual = result.mmd_lt15_week12 - result.target_mmd_lt15_week12
+        compatible = compatible and abs(mean_residual) <= mean_tolerance
+        compatible = compatible and abs(responder_residual) <= responder_tolerance
+        row.update(
+            {
+                f"{prefix}_target_mean_mmd": result.target_mean_mmd_week12,
+                f"{prefix}_mean_mmd": result.mean_mmd_week12,
+                f"{prefix}_mean_mmd_residual": mean_residual,
+                f"{prefix}_target_responder50": result.target_responder50_week12,
+                f"{prefix}_responder50": result.responder50_week12,
+                f"{prefix}_responder50_residual": responder_residual,
+                f"{prefix}_target_mmd_lt15": result.target_mmd_lt15_week12,
+                f"{prefix}_mmd_lt15": result.mmd_lt15_week12,
+                f"{prefix}_mmd_lt15_residual": mmd_lt15_residual,
+                f"{prefix}_calibration_objective": result.objective_value,
+                f"{prefix}_mix_weight_low": result.parameters.get("mix_weight_low", np.nan),
+                f"{prefix}_component_mean_low": result.parameters.get("component_mean_low", np.nan),
+                f"{prefix}_component_sd_low": result.parameters.get("component_sd_low", np.nan),
+                f"{prefix}_component_mean_high": result.parameters.get("component_mean_high", np.nan),
+                f"{prefix}_component_sd_high": result.parameters.get("component_sd_high", np.nan),
+                f"{prefix}_rank_correlation_weight": result.parameters.get(
+                    "rank_correlation_weight", np.nan
+                ),
+            }
+        )
+    incremental = incremental_summary(model_output)
+    row.update(incremental)
+    row["primary_targets_compatible"] = bool(compatible)
+    row["cost_effective_at_3x_gdp"] = bool(incremental["inmb_3x_gdp_cny"] >= 0.0)
+    return row
+
+
+def run_calibration_robustness_analysis(
+    inputs: ModelInputs,
+    base_output,
+    screening_n_patients: int,
+    seed: int,
+    *,
+    weights: list[float] | tuple[float, ...] | None = None,
+    de_maxiter: int = 80,
+    de_popsize: int = 7,
+    local_maxiter: int = 900,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Evaluate economic stability across prespecified MMD<15 target weights."""
+    config = inputs.config["calibration_robustness"]
+    selected_weights = tuple(
+        float(value) for value in (weights if weights is not None else config["mmd_lt15_weights"])
+    )
+    if screening_n_patients <= 0:
+        raise ValueError("Calibration screening patient count must be positive")
+    if not selected_weights or any(
+        not np.isfinite(value) or value < 0.0 for value in selected_weights
+    ):
+        raise ValueError("Calibration target weights must be a non-empty set of nonnegative values")
+
+    mean_tolerance = float(config["primary_mean_mmd_tolerance"])
+    responder_tolerance = float(config["primary_responder50_tolerance"])
+    evaluation_n_patients = int(len(base_output.baseline_mmd))
+    evaluation_settings = SimulationSettings(
+        n_patients=evaluation_n_patients,
+        seed=seed,
+        scenario_id="calibration_robustness",
+        calibration_mode="frozen",
+    )
+    screening_settings = SimulationSettings(
+        n_patients=int(screening_n_patients),
+        seed=seed,
+        scenario_id="calibration_robustness_screening",
+        calibration_mode="frozen",
+    )
+    screening_baseline = _baseline_mmd(inputs, screening_settings, overrides=None)
+
+    rows: list[dict[str, Any]] = []
+    base_calibrations = base_output.calibration_results
+    rows.append(
+        _calibration_robustness_row(
+            inputs,
+            "basecase_frozen",
+            "basecase_reference",
+            float(config["basecase_mmd_lt15_weight"]),
+            base_calibrations,
+            base_output,
+            None,
+            mean_tolerance,
+            responder_tolerance,
+        )
+    )
+
+    for weight in selected_weights:
+        calibrations: dict[str, CalibrationResult] = {}
+        for arm in (inputs.intervention_arm, inputs.comparator_arm):
+            calibrations[arm] = calibrate_continuous_target_weight(
+                inputs,
+                arm,
+                screening_baseline,
+                base_output.baseline_mmd,
+                draw_seed=_calibration_draw_seed(inputs, arm),
+                mmd_lt15_weight=weight,
+                de_maxiter=de_maxiter,
+                de_popsize=de_popsize,
+                local_maxiter=local_maxiter,
+            )
+        output = run_basecase_simulation(
+            inputs,
+            evaluation_settings,
+            overrides=None,
+            calibration_results_override=calibrations,
+        )
+        rows.append(
+            _calibration_robustness_row(
+                inputs,
+                f"target_weight_{weight:g}",
+                "prespecified_target_weight",
+                weight,
+                calibrations,
+                output,
+                screening_n_patients,
+                mean_tolerance,
+                responder_tolerance,
+            )
+        )
+
+    results = pd.DataFrame(rows)
+    compatible = results.loc[
+        (results["analysis_type"] == "prespecified_target_weight")
+        & results["primary_targets_compatible"]
+    ].copy()
+    base_decision = bool(
+        results.loc[results["analysis_id"] == "basecase_frozen", "cost_effective_at_3x_gdp"].iloc[0]
+    )
+    base_row = results.loc[results["analysis_id"] == "basecase_frozen"].iloc[0]
+    base_incremental_qaly = float(base_row["incremental_qaly"])
+    base_icer = float(base_row["icer_cny_per_qaly"])
+    range_available = not compatible.empty
+
+    def compatible_extreme(column: str, function: str) -> float:
+        if not range_available:
+            return float("nan")
+        return float(getattr(compatible[column], function)())
+
+    summary = pd.DataFrame(
+        [
+            {
+                "n_prespecified_target_weights": int(
+                    np.sum(results["analysis_type"] == "prespecified_target_weight")
+                ),
+                "n_primary_compatible_target_weights": int(len(compatible)),
+                "economic_range_available": bool(range_available),
+                "basecase_incremental_qaly": base_incremental_qaly,
+                "incremental_qaly_min": compatible_extreme("incremental_qaly", "min"),
+                "incremental_qaly_max": compatible_extreme("incremental_qaly", "max"),
+                "incremental_qaly_relative_change_min": (
+                    compatible_extreme("incremental_qaly", "min") / base_incremental_qaly - 1.0
+                    if range_available
+                    else float("nan")
+                ),
+                "incremental_qaly_relative_change_max": (
+                    compatible_extreme("incremental_qaly", "max") / base_incremental_qaly - 1.0
+                    if range_available
+                    else float("nan")
+                ),
+                "basecase_icer_cny_per_qaly": base_icer,
+                "icer_cny_per_qaly_min": compatible_extreme("icer_cny_per_qaly", "min"),
+                "icer_cny_per_qaly_max": compatible_extreme("icer_cny_per_qaly", "max"),
+                "icer_relative_change_min": (
+                    compatible_extreme("icer_cny_per_qaly", "min") / base_icer - 1.0
+                    if range_available
+                    else float("nan")
+                ),
+                "icer_relative_change_max": (
+                    compatible_extreme("icer_cny_per_qaly", "max") / base_icer - 1.0
+                    if range_available
+                    else float("nan")
+                ),
+                "inmb_3x_gdp_cny_min": compatible_extreme("inmb_3x_gdp_cny", "min"),
+                "inmb_3x_gdp_cny_max": compatible_extreme("inmb_3x_gdp_cny", "max"),
+                "all_primary_compatible_target_weight_decisions_match_basecase": bool(
+                    range_available
+                    and np.all(compatible["cost_effective_at_3x_gdp"] == base_decision)
+                ),
+                "range_interpretation": (
+                    "Observed range across prespecified target weights; "
+                    "not a confidence or credible interval"
+                ),
+            }
+        ]
+    )
+    return results, summary
 
 
 def _range_from_base(base: float, lower: float | None, upper: float | None, value_type: str) -> tuple[float, float]:
@@ -221,7 +451,11 @@ def build_owsa_specs(inputs: ModelInputs) -> list[OWSASpec]:
     discontinuation_cfg = inputs.config["discontinuation"]
     for parameter_id, name_cn in [
         (str(discontinuation_cfg["short_term_rule"]), "0-12 week double-blind all-cause discontinuation rate"),
-        (str(discontinuation_cfg["maintenance_rule"]), "Long-term all-cause discontinuation rate"),
+        (str(discontinuation_cfg["maintenance_rule"]), "52-week open-label treatment discontinuation rate"),
+        (
+            str(discontinuation_cfg["lack_efficacy_share_rule"]),
+            "Conditional share of discontinuations due to lack of efficacy",
+        ),
     ]:
         row = _psa_row(inputs, parameter_id)
         if row is None:
@@ -348,18 +582,15 @@ def _gamma_sample_from_range(
 
 
 def _psa_parameter_mapping(inputs: ModelInputs) -> dict[str, str | None]:
-    return {
+    discontinuation_cfg = inputs.config["discontinuation"]
+    mapping: dict[str, str | None] = {
         "mmd_change_w12_erenumab": f"mmd_change_w12_{inputs.intervention_arm}",
         "mmd_change_w12_bsc": f"mmd_change_w12_{inputs.comparator_arm}",
         "responder50_w12_erenumab": f"responder50_week12_{inputs.intervention_arm}",
         "responder50_w12_bsc": f"responder50_week12_{inputs.comparator_arm}",
         "mmd_lt15_w12_erenumab": f"mmd_lt15_week12_{inputs.intervention_arm}",
         "mmd_lt15_w12_bsc": f"mmd_lt15_week12_{inputs.comparator_arm}",
-        "disc_allcause_12w": "disc_allcause_12w",
-        "disc_allcause_64w": "disc_allcause_64w",
-        "disc_lack_efficacy_64w": None,
-        "disc_ae_64w": None,
-        "erenumab_price_per_4w": None,
+        "erenumab_price_per_4w": "erenumab_price_per_4w",
         "utility_0_3": "utility_0_3",
         "utility_4_9": "utility_4_9",
         "utility_10_14": "utility_10_14",
@@ -368,6 +599,10 @@ def _psa_parameter_mapping(inputs: ModelInputs) -> dict[str, str | None]:
         "utility_24_28": "utility_24_28",
         "bsc_outpatient_cost_annual": None,
     }
+    for config_key in ("short_term_rule", "maintenance_rule", "lack_efficacy_share_rule"):
+        parameter_id = str(discontinuation_cfg[config_key])
+        mapping[parameter_id] = parameter_id
+    return mapping
 
 
 def _project_nonincreasing(values: np.ndarray) -> np.ndarray:

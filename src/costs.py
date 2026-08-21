@@ -31,3 +31,14 @@ def discontinuation_cycle_probability(
         return probability_to_cycle_probability(float(overrides[parameter_id]), float(row["time_window_cycles"]))
     return float(row["converted_4w_probability"])
 
+
+def discontinuation_probability_value(
+    inputs: ModelInputs,
+    parameter_id: str,
+    overrides: dict[str, Any] | None = None,
+) -> float:
+    """Return a probability input without converting its time window."""
+    row = discontinuation_row(inputs, parameter_id)
+    if overrides and parameter_id in overrides:
+        return float(overrides[parameter_id])
+    return float(row["original_value"])

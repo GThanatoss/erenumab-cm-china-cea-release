@@ -6,7 +6,9 @@ responder50_w12_bsc,Week 12 >=50% MMD responder rate(No preventive treatment),0.
 mmd_lt15_w12_erenumab,Week 12 MMD<15 proportion(Erenumab preventive treatment),0.523,beta,146,133,,,,S_DRAGON_POSTHOC,Used in PSA recalibration target; not varied separately in OWSA
 mmd_lt15_w12_bsc,Week 12 MMD<15 proportion(No preventive treatment),0.41,beta,114,164,,,,S_DRAGON_POSTHOC,Used in PSA recalibration target; not varied separately in OWSA
 disc_allcause_12w,0-12 week double-blind all-cause discontinuation rate,0.021505,beta,6,273,,0.017204,0.025806,S_DRAGON,6/279 discontinued during the double-blind treatment period; OWSA range uses +/-20%
-disc_allcause_64w,Long-term all-cause discontinuation from Tepper open-label extension study,0.259,beta,158,451,,0.2072,0.3108,S_OLE_64W,158/609 discontinued over the 64-week total study period (12-week double-blind phase plus 52-week open-label extension); OWSA range uses +/-20%
+disc_treatment_52w,Open-label treatment discontinuation during the 52-week extension,0.228,beta,139,470,,0.1824,0.2736,S_OLE_52W,139/609 discontinued open-label treatment; OWSA range uses +/-20%
+disc_lack_efficacy_share,Conditional share of treatment discontinuations due to lack of efficacy,0.2807017544,beta,39,100,,0.2245614035,0.3368421053,S_OLE_52W,39/139 treatment discontinuations were due to lack of efficacy; OWSA range uses +/-20%
+erenumab_price_per_4w,Erenumab 70 mg box price,3498,gamma,,,,2798.4,4197.6,S_PRICE_ERE,Gamma PSA distribution; assumed uncertainty range based on +/-20% of the base-case price
 utility_0_3,0-3 MMD utility,0.71,beta,,,,0.6,0.82,S_US_CE,Range-based because SE is unavailable
 utility_4_9,4-9 MMD utility,0.61,beta,,,,0.5,0.72,S_US_CE,Range-based because SE is unavailable
 utility_10_14,10-14 MMD utility,0.57,beta,,,,0.46,0.68,S_US_CE,Range-based because SE is unavailable

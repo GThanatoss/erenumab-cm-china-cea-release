@@ -95,77 +95,6 @@ def _objective(metrics: tuple[float, float, float], target: CalibrationTarget) -
     return float(np.sum(residuals**2))
 
 
-def _calibration_start_shares(inputs: ModelInputs, arm: str) -> np.ndarray | None:
-    if arm == inputs.intervention_arm:
-        column = "calibration_start_erenumab"
-    elif arm == inputs.comparator_arm:
-        column = "calibration_start_bsc"
-    else:
-        return None
-    if column not in inputs.mmd_states.columns:
-        return None
-    return inputs.mmd_states[column].astype(float).to_numpy()
-
-
-def _target_state_shares(
-    inputs: ModelInputs,
-    arm: str,
-    target: CalibrationTarget | None = None,
-) -> np.ndarray | None:
-    target_shares = _calibration_start_shares(inputs, arm)
-    if target_shares is None:
-        return None
-    if target is None:
-        return target_shares
-    current_lt15 = float(np.sum(target_shares[:3]))
-    desired_lt15 = min(max(float(target.mmd_lt15_week12), 0.0), 1.0)
-    adjusted = target_shares.astype(float, copy=True)
-    if current_lt15 > 0:
-        adjusted[:3] *= desired_lt15 / current_lt15
-    if current_lt15 < 1:
-        adjusted[3:] *= (1.0 - desired_lt15) / (1.0 - current_lt15)
-    total = float(np.sum(adjusted))
-    if total > 0:
-        adjusted /= total
-    return adjusted
-
-
-def _state_share_penalty(
-    inputs: ModelInputs,
-    arm: str,
-    week12_mmd: np.ndarray,
-    target: CalibrationTarget | None = None,
-) -> float:
-    target_shares = _target_state_shares(inputs, arm, target)
-    if target_shares is None:
-        return 0.0
-    indices = state_indices_from_mmd(week12_mmd, inputs.mmd_states)
-    simulated = np.array([np.mean(indices == idx) for idx in range(len(target_shares))], dtype=float)
-    residuals = (simulated - target_shares) / 0.05
-    return float(0.75 * np.sum(residuals**2))
-
-
-def _single_normal_week12(
-    baseline_mmd: np.ndarray,
-    z: np.ndarray,
-    mean_change: float,
-    sd_change: float,
-) -> np.ndarray:
-    return np.clip(baseline_mmd + mean_change + sd_change * z, MMD_MIN, MMD_MAX)
-
-
-def _mixture_week12(
-    baseline_mmd: np.ndarray,
-    z1: np.ndarray,
-    z2: np.ndarray,
-    u: np.ndarray,
-    params: np.ndarray,
-) -> np.ndarray:
-    weight, mean1, sd1, mean2, sd2 = params
-    changes = np.where(u <= weight, mean1 + sd1 * z1, mean2 + sd2 * z2)
-    return np.clip(baseline_mmd + changes, MMD_MIN, MMD_MAX)
-
-
 def _continuous_random_draws(n: int, seed: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     rng = np.random.default_rng(seed)
     return (
@@ -276,6 +205,11 @@ def _smooth_continuous_week12(
     baseline_mmd: np.ndarray,
     draw_seed: int,
     target: CalibrationTarget,
+    *,
+    mmd_lt15_weight: float = 0.60,
+    de_maxiter: int = 60,
+    de_popsize: int = 7,
+    local_maxiter: int = 900,
 ) -> tuple[np.ndarray, dict[str, float], float]:
     u_mix, u_low, u_high, rank_noise = _continuous_random_draws(len(baseline_mmd), draw_seed)
 
@@ -297,7 +231,8 @@ def _smooth_continuous_week12(
         clinical_loss = (
             ((mean_mmd - target.mean_mmd_week12) / 0.03) ** 2
             + ((responder50 - target.responder50_week12) / 0.006) ** 2
-            + 0.60 * ((mmd_lt15 - target.mmd_lt15_week12) / 0.03) ** 2
+            + float(mmd_lt15_weight)
+            * ((mmd_lt15 - target.mmd_lt15_week12) / 0.03) ** 2
         )
         return float(
             clinical_loss
@@ -319,8 +254,8 @@ def _smooth_continuous_week12(
         objective,
         bounds=bounds,
         seed=seed,
-        maxiter=60,
-        popsize=7,
+        maxiter=int(de_maxiter),
+        popsize=int(de_popsize),
         polish=False,
         tol=1e-4,
         updating="immediate",
@@ -329,7 +264,7 @@ def _smooth_continuous_week12(
         objective,
         np.asarray(de_fit.x, dtype=float),
         method="Nelder-Mead",
-        options={"maxiter": 900},
+        options={"maxiter": int(local_maxiter)},
     )
     de_x = np.asarray(de_fit.x, dtype=float)
     local_x = np.asarray(local_fit.x, dtype=float)
@@ -348,95 +283,71 @@ def _smooth_continuous_week12(
         "continuous_draw_seed": float(draw_seed),
         "smoothness_penalty": _histogram_smoothness_penalty(week12),
         "local_continuity_penalty": _local_continuity_penalty(week12),
+        "mmd_lt15_objective_weight": float(mmd_lt15_weight),
     }
     return week12, params, objective(best_x)
 
 
-def _state_counts(n: int, shares: np.ndarray) -> np.ndarray:
-    raw = shares * n
-    counts = np.floor(raw).astype(int)
-    remainder = int(n - counts.sum())
-    if remainder > 0:
-        order = np.argsort(raw - counts)[::-1]
-        counts[order[:remainder]] += 1
-    elif remainder < 0:
-        order = np.argsort(raw - counts)
-        for idx in order[: abs(remainder)]:
-            if counts[idx] > 0:
-                counts[idx] -= 1
-    return counts
-
-
-def _adjust_within_bounds(values: np.ndarray, lower: float, upper: float, target_mean: float) -> np.ndarray:
-    adjusted = values.astype(float, copy=True)
-    for _ in range(30):
-        diff = target_mean - float(np.mean(adjusted))
-        if abs(diff) < 1e-8:
-            break
-        adjusted = np.clip(adjusted + diff, lower, upper)
-    return adjusted
-
-
-def _state_informed_week12(
+def calibrate_continuous_target_weight(
     inputs: ModelInputs,
     arm: str,
-    baseline_mmd: np.ndarray,
-    rng: np.random.Generator,
-    target: CalibrationTarget,
-) -> tuple[np.ndarray, dict[str, float], float]:
-    shares = _target_state_shares(inputs, arm, target)
-    if shares is None:
-        raise ValueError(f"Missing calibration start shares for {arm}")
-
-    counts = _state_counts(len(baseline_mmd), shares)
-    state_values: list[np.ndarray] = []
-    state_bounds: list[tuple[float, float]] = []
-    for count, (_, row) in zip(counts, inputs.mmd_states.reset_index(drop=True).iterrows()):
-        if count <= 0:
-            continue
-        lower = float(row["lower_bound"])
-        upper = float(row["upper_bound"])
-        representative = float(row["representative_mmd"])
-        sd = max((upper - lower) / 8.0, 0.05)
-        values = rng.normal(representative, sd, count)
-        values = np.clip(values, lower, upper)
-        values = _adjust_within_bounds(values, lower, upper, representative)
-        state_values.append(values)
-        state_bounds.extend([(lower, upper)] * count)
-
-    values = np.concatenate(state_values)
-    bounds = np.array(state_bounds, dtype=float)
-    for _ in range(30):
-        diff = target.mean_mmd_week12 - float(np.mean(values))
-        if abs(diff) < 1e-8:
-            break
-        values = np.clip(values + diff, bounds[:, 0], bounds[:, 1])
-
-    sorted_values = np.sort(values)
-    baseline_rank = baseline_mmd.argsort().argsort().astype(float) / max(len(baseline_mmd) - 1, 1)
-    random_score = rng.standard_normal(len(baseline_mmd))
-    best_week12: np.ndarray | None = None
-    best_obj = float("inf")
-    best_rho = 0.0
-    for rho in np.linspace(-1.0, 1.0, 101):
-        score = (1.0 - abs(float(rho))) * random_score - float(rho) * baseline_rank
-        patient_order = np.argsort(score)
-        candidate = np.empty_like(sorted_values)
-        candidate[patient_order] = sorted_values
-        obj = _objective(_metrics(baseline_mmd, candidate), target) + _state_share_penalty(
-            inputs, arm, candidate, target
-        )
-        if obj < best_obj:
-            best_obj = obj
-            best_week12 = candidate
-            best_rho = float(rho)
-
-    assert best_week12 is not None
-    params = {
-        "rank_correlation_weight": best_rho,
-        "uses_calibration_start_state_shares": 1.0,
-    }
-    return best_week12, params, best_obj
+    screening_baseline_mmd: np.ndarray,
+    evaluation_baseline_mmd: np.ndarray,
+    *,
+    draw_seed: int,
+    mmd_lt15_weight: float,
+    de_maxiter: int = 80,
+    de_popsize: int = 7,
+    local_maxiter: int = 900,
+) -> CalibrationResult:
+    """Fit one prespecified target weight and evaluate it on a common cohort."""
+    target = calibration_target(inputs, arm, overrides=None)
+    _, params, screening_objective = _smooth_continuous_week12(
+        screening_baseline_mmd,
+        draw_seed,
+        target,
+        mmd_lt15_weight=float(mmd_lt15_weight),
+        de_maxiter=de_maxiter,
+        de_popsize=de_popsize,
+        local_maxiter=local_maxiter,
+    )
+    evaluation_week12 = _smooth_continuous_values_from_parameters(
+        evaluation_baseline_mmd,
+        params,
+        draw_seed,
+    )
+    mean_shift = target.mean_mmd_week12 - float(np.mean(evaluation_week12))
+    evaluation_week12 = _shift_to_global_mean(evaluation_week12, target.mean_mmd_week12)
+    metrics = _metrics(evaluation_baseline_mmd, evaluation_week12)
+    clinical_objective = (
+        ((metrics[0] - target.mean_mmd_week12) / 0.03) ** 2
+        + ((metrics[1] - target.responder50_week12) / 0.006) ** 2
+        + float(mmd_lt15_weight)
+        * ((metrics[2] - target.mmd_lt15_week12) / 0.03) ** 2
+    )
+    parameters = dict(params)
+    parameters.update(
+        {
+            "screening_objective_value": float(screening_objective),
+            "evaluation_clinical_objective_value": float(clinical_objective),
+            "post_calibration_mean_shift": float(mean_shift),
+            "screening_n_patients": float(len(screening_baseline_mmd)),
+            "evaluation_n_patients": float(len(evaluation_baseline_mmd)),
+        }
+    )
+    return CalibrationResult(
+        arm=arm,
+        method="continuous_calibration_target_weight_analysis",
+        parameters=parameters,
+        week12_mmd=evaluation_week12,
+        mean_mmd_week12=metrics[0],
+        responder50_week12=metrics[1],
+        mmd_lt15_week12=metrics[2],
+        target_mean_mmd_week12=target.mean_mmd_week12,
+        target_responder50_week12=target.responder50_week12,
+        target_mmd_lt15_week12=target.mmd_lt15_week12,
+        objective_value=float(clinical_objective),
+    )
 
 
 def frozen_calibration_available(inputs: ModelInputs) -> bool:
@@ -459,15 +370,7 @@ def frozen_calibration_available(inputs: ModelInputs) -> bool:
         "component_sd_high",
         "continuous_draw_seed",
     }
-    state_required = common_required | {
-        "share_S1",
-        "share_S2",
-        "share_S3",
-        "share_S4",
-        "share_S5",
-        "share_S6",
-    }
-    return continuous_required.issubset(columns) or state_required.issubset(columns)
+    return continuous_required.issubset(columns)
 
 
 def _frozen_row(inputs: ModelInputs, arm: str) -> dict[str, Any]:
@@ -477,64 +380,6 @@ def _frozen_row(inputs: ModelInputs, arm: str) -> dict[str, Any]:
     if rows.empty:
         raise KeyError(f"Frozen calibration parameters are missing for arm: {arm}")
     return rows.iloc[0].to_dict()
-
-
-def _shares_from_frozen_row(
-    row: dict[str, Any],
-    target: CalibrationTarget,
-    keep_frozen_mmd_lt15: bool = False,
-) -> np.ndarray:
-    shares = np.array([float(row[f"share_S{i}"]) for i in range(1, 7)], dtype=float)
-    if keep_frozen_mmd_lt15:
-        return shares / float(np.sum(shares))
-    current_lt15 = float(np.sum(shares[:3]))
-    desired_lt15 = min(max(target.mmd_lt15_week12, 0.0), 1.0)
-    adjusted = shares.copy()
-    if current_lt15 > 0:
-        adjusted[:3] *= desired_lt15 / current_lt15
-    if current_lt15 < 1:
-        adjusted[3:] *= (1.0 - desired_lt15) / (1.0 - current_lt15)
-    total = float(np.sum(adjusted))
-    if total <= 0:
-        raise ValueError("Frozen calibration shares sum to zero")
-    return adjusted / total
-
-
-def _state_values_for_counts(
-    inputs: ModelInputs,
-    counts: np.ndarray,
-    target_mean: float,
-    rng: np.random.Generator | None = None,
-    stochastic: bool = False,
-    sd_divisor: float = 8.0,
-) -> np.ndarray:
-    state_values: list[np.ndarray] = []
-    bounds: list[tuple[float, float]] = []
-    for count, (_, row) in zip(counts, inputs.mmd_states.reset_index(drop=True).iterrows()):
-        if count <= 0:
-            continue
-        representative = float(row["representative_mmd"])
-        lower = float(row["lower_bound"])
-        upper = float(row["upper_bound"])
-        if stochastic:
-            if rng is None:
-                raise ValueError("A random generator is required for stochastic state values")
-            sd = max((upper - lower) / sd_divisor, 0.05)
-            values = rng.normal(representative, sd, int(count))
-            values = np.clip(values, lower, upper)
-            values = _adjust_within_bounds(values, lower, upper, representative)
-        else:
-            values = np.full(int(count), representative, dtype=float)
-        state_values.append(values)
-        bounds.extend([(lower, upper)] * int(count))
-    value_array = np.concatenate(state_values)
-    bound_array = np.asarray(bounds, dtype=float)
-    for _ in range(50):
-        diff = target_mean - float(np.mean(value_array))
-        if abs(diff) < 1e-10:
-            break
-        value_array = np.clip(value_array + diff, bound_array[:, 0], bound_array[:, 1])
-    return value_array
 
 
 def _shift_to_global_mean(values: np.ndarray, target_mean: float) -> np.ndarray:
@@ -684,97 +529,15 @@ def apply_frozen_calibration(
 ) -> CalibrationResult:
     row = _frozen_row(inputs, arm)
     target = calibration_target(inputs, arm, overrides)
-    if _is_continuous_frozen_row(row) and not (overrides and overrides.get("_use_state_calibration")):
-        return _apply_frozen_continuous_calibration(row, target, baseline_mmd, overrides)
-
-    mmd_change_only = bool(overrides and overrides.get("_mmd_change_only_recalibration"))
-    shares = _shares_from_frozen_row(row, target, keep_frozen_mmd_lt15=mmd_change_only)
-    counts = _state_counts(len(baseline_mmd), shares)
-    value_target_mean = float(row["target_mean_mmd_week12"]) if mmd_change_only else target.mean_mmd_week12
-    value_generation = str(row.get("value_generation") or "")
-    stochastic_values = value_generation.startswith("stochastic")
-    state_value_rng = None
-    if stochastic_values:
-        state_value_seed = int(row.get("state_value_seed") or row.get("calibration_seed") or 314159)
-        state_value_rng = np.random.default_rng(state_value_seed)
-    sd_divisor = float(row.get("within_state_sd_divisor") or 8.0)
-    sorted_values = np.sort(
-        _state_values_for_counts(
-            inputs,
-            counts,
-            value_target_mean,
-            rng=state_value_rng,
-            stochastic=stochastic_values,
-            sd_divisor=sd_divisor,
-        )
-    )
-
-    baseline_rank = baseline_mmd.argsort().argsort().astype(float) / max(len(baseline_mmd) - 1, 1)
-    base_rank_weight = float(row["rank_correlation_weight"])
-    seed = int(row.get("calibration_seed") or 314159)
-    random_score = np.random.default_rng(seed).standard_normal(len(baseline_mmd))
-
-    def assign_with_rank(rank_weight: float) -> np.ndarray:
-        if abs(rank_weight) >= 0.999999:
-            score = -rank_weight * baseline_rank
-        else:
-            score = (1.0 - abs(rank_weight)) * random_score - rank_weight * baseline_rank
-        patient_order = np.argsort(score)
-        candidate = np.empty_like(sorted_values)
-        candidate[patient_order] = sorted_values
-        return candidate
-
-    frozen_responder = float(row["target_responder50_week12"])
-    if (not mmd_change_only) and abs(target.responder50_week12 - frozen_responder) > 1e-9:
-        best_week12 = None
-        best_rank_weight = base_rank_weight
-        best_objective = float("inf")
-        for candidate_rank in np.linspace(-1.0, 1.0, 101):
-            candidate = assign_with_rank(float(candidate_rank))
-            candidate_objective = _objective(_metrics(baseline_mmd, candidate), target)
-            if candidate_objective < best_objective:
-                best_objective = candidate_objective
-                best_week12 = candidate
-                best_rank_weight = float(candidate_rank)
-        assert best_week12 is not None
-        week12_mmd = best_week12
-        rank_weight = best_rank_weight
-    else:
-        rank_weight = base_rank_weight
-        week12_mmd = assign_with_rank(rank_weight)
-    if mmd_change_only:
-        week12_mmd = _shift_to_global_mean(week12_mmd, target.mean_mmd_week12)
-
-    metrics = _metrics(baseline_mmd, week12_mmd)
-    objective_value = _objective(metrics, target) + _state_share_penalty(inputs, arm, week12_mmd, target)
-    parameters = {
-        "rank_correlation_weight": rank_weight,
-        "uses_frozen_calibration_parameters": 1.0,
-        "calibration_seed": float(row.get("calibration_seed") or 314159),
-        "state_value_seed": float(row.get("state_value_seed") or row.get("calibration_seed") or 314159),
-    }
-    for idx in range(1, 7):
-        parameters[f"frozen_share_S{idx}"] = float(row[f"share_S{idx}"])
-    return CalibrationResult(
-        arm=arm,
-        method=str(row["method"]),
-        parameters=parameters,
-        week12_mmd=week12_mmd,
-        mean_mmd_week12=metrics[0],
-        responder50_week12=metrics[1],
-        mmd_lt15_week12=metrics[2],
-        target_mean_mmd_week12=target.mean_mmd_week12,
-        target_responder50_week12=target.responder50_week12,
-        target_mmd_lt15_week12=target.mmd_lt15_week12,
-        objective_value=objective_value,
-    )
+    if not _is_continuous_frozen_row(row):
+        raise ValueError(f"Frozen continuous calibration parameters are incomplete for arm: {arm}")
+    return _apply_frozen_continuous_calibration(row, target, baseline_mmd, overrides)
 
 
 def frozen_calibration_rows(
     inputs: ModelInputs,
     n_patients: int,
     seed: int,
-    calibration_method: str = "continuous",
 ) -> pd.DataFrame:
     from .simulation import SimulationSettings, _baseline_mmd
 
@@ -785,8 +548,6 @@ def frozen_calibration_rows(
         draw_seed = seed + 1000 + idx
         rng = np.random.default_rng(draw_seed)
         overrides = {"_continuous_draw_seed": draw_seed}
-        if calibration_method == "state":
-            overrides["_use_state_calibration"] = True
         result = calibrate_week12_distribution(
             inputs,
             arm,
@@ -798,17 +559,13 @@ def frozen_calibration_rows(
         row: dict[str, Any] = {
             "parameter_id": f"cal_week12_{arm}",
             "arm": arm,
-            "method": (
-                "frozen_state_distribution_rank_calibration"
-                if calibration_method == "state"
-                else "frozen_smooth_continuous_mmd_calibration"
-            ),
+            "method": "frozen_smooth_continuous_mmd_calibration",
             "target_mean_mmd_week12": target.mean_mmd_week12,
             "target_responder50_week12": target.responder50_week12,
             "target_mmd_lt15_week12": target.mmd_lt15_week12,
             "rank_correlation_weight": float(result.parameters.get("rank_correlation_weight", np.nan)),
             "calibration_seed": seed,
-            "continuous_draw_seed": draw_seed if calibration_method != "state" else np.nan,
+            "continuous_draw_seed": draw_seed,
             "calibration_n_patients": n_patients,
             "simulated_mean_mmd_week12": result.mean_mmd_week12,
             "simulated_responder50_week12": result.responder50_week12,
@@ -822,38 +579,18 @@ def frozen_calibration_rows(
                 "Frozen continuous Week 12 MMD calibration parameters generated from current model inputs; "
                 "MMD states are used only for utility mapping and diagnostics. Rerun calibrate_model.py "
                 "after changing baseline MMD distribution or Week 12 calibration targets."
-                if calibration_method != "state"
-                else "Legacy frozen state-distribution calibration parameters; retained for validation scenario only."
             ),
         }
-        if calibration_method == "state":
-            shares = _target_state_shares(inputs, arm, target)
-            if shares is None:
-                raise ValueError(f"Cannot freeze calibration because state shares are missing for {arm}")
-            row.update(
-                {
-                    "share_S1": float(shares[0]),
-                    "share_S2": float(shares[1]),
-                    "share_S3": float(shares[2]),
-                    "share_S4": float(shares[3]),
-                    "share_S5": float(shares[4]),
-                    "share_S6": float(shares[5]),
-                    "value_generation": "stochastic_within_state_normal_shifted_to_target_mean",
-                    "state_value_seed": seed + 1000 + idx,
-                    "within_state_sd_divisor": 8.0,
-                }
-            )
-        else:
-            row.update(
-                {
-                    "distribution_family": "two_component_truncated_normal_marginal",
-                    "mix_weight_low": float(result.parameters["mix_weight_low"]),
-                    "component_mean_low": float(result.parameters["component_mean_low"]),
-                    "component_sd_low": float(result.parameters["component_sd_low"]),
-                    "component_mean_high": float(result.parameters["component_mean_high"]),
-                    "component_sd_high": float(result.parameters["component_sd_high"]),
-                }
-            )
+        row.update(
+            {
+                "distribution_family": "two_component_truncated_normal_marginal",
+                "mix_weight_low": float(result.parameters["mix_weight_low"]),
+                "component_mean_low": float(result.parameters["component_mean_low"]),
+                "component_sd_low": float(result.parameters["component_sd_low"]),
+                "component_mean_high": float(result.parameters["component_mean_high"]),
+                "component_sd_high": float(result.parameters["component_sd_high"]),
+            }
+        )
         indices = state_indices_from_mmd(result.week12_mmd, inputs.mmd_states)
         for state_idx, state in inputs.mmd_states.reset_index(drop=True).iterrows():
             row[f"diagnostic_share_{state['state_id']}"] = float(np.mean(indices == state_idx))
@@ -880,28 +617,10 @@ def calibrate_week12_distribution(
     baseline_mmd: np.ndarray,
     rng: np.random.Generator,
     overrides: dict[str, Any] | None = None,
-    allow_mixture: bool = True,
 ) -> CalibrationResult:
     target = calibration_target(inputs, arm, overrides)
     if overrides and overrides.get("_mmd_change_only_recalibration") and frozen_calibration_available(inputs):
         return apply_frozen_calibration(inputs, arm, baseline_mmd, overrides)
-    if overrides and overrides.get("_use_state_calibration") and _target_state_shares(inputs, arm, target) is not None:
-        state_week12, state_params, state_obj = _state_informed_week12(inputs, arm, baseline_mmd, rng, target)
-        state_metrics = _metrics(baseline_mmd, state_week12)
-        return CalibrationResult(
-            arm=arm,
-            method="state_distribution_rank_calibration",
-            parameters=state_params,
-            week12_mmd=state_week12,
-            mean_mmd_week12=state_metrics[0],
-            responder50_week12=state_metrics[1],
-            mmd_lt15_week12=state_metrics[2],
-            target_mean_mmd_week12=target.mean_mmd_week12,
-            target_responder50_week12=target.responder50_week12,
-            target_mmd_lt15_week12=target.mmd_lt15_week12,
-            objective_value=state_obj,
-        )
-
     draw_seed = (
         int(overrides["_continuous_draw_seed"])
         if overrides and "_continuous_draw_seed" in overrides
@@ -925,159 +644,4 @@ def calibrate_week12_distribution(
         target_responder50_week12=target.responder50_week12,
         target_mmd_lt15_week12=target.mmd_lt15_week12,
         objective_value=continuous_obj,
-    )
-    n = len(baseline_mmd)
-    z_single = rng.standard_normal(n)
-
-    def single_objective(x: np.ndarray) -> float:
-        mean_change, log_sd = x
-        week12 = _single_normal_week12(baseline_mmd, z_single, mean_change, np.exp(log_sd))
-        return _objective(_metrics(baseline_mmd, week12), target) + _state_share_penalty(
-            inputs, arm, week12, target
-        )
-
-    start = np.array([target.observed_mmd_change_week12, np.log(4.0)], dtype=float)
-    single_bounds = [(-25.0, 5.0), (np.log(0.15), np.log(15.0))]
-    single_fit = minimize(single_objective, start, method="Nelder-Mead", options={"maxiter": 600})
-    if not single_fit.success:
-        single_fit = minimize(single_objective, start, method="L-BFGS-B", bounds=single_bounds)
-    single_params = np.array(single_fit.x, dtype=float)
-    single_params[0] = min(max(single_params[0], single_bounds[0][0]), single_bounds[0][1])
-    single_params[1] = min(max(single_params[1], single_bounds[1][0]), single_bounds[1][1])
-    single_week12 = _single_normal_week12(
-        baseline_mmd,
-        z_single,
-        float(single_params[0]),
-        float(np.exp(single_params[1])),
-    )
-    single_metrics = _metrics(baseline_mmd, single_week12)
-    single_obj = _objective(single_metrics, target) + _state_share_penalty(
-        inputs, arm, single_week12, target
-    )
-    if single_obj <= 4.0 or not allow_mixture:
-        return CalibrationResult(
-            arm=arm,
-            method="single_normal_change",
-            parameters={
-                "mean_change": float(single_params[0]),
-                "sd_change": float(np.exp(single_params[1])),
-            },
-            week12_mmd=single_week12,
-            mean_mmd_week12=single_metrics[0],
-            responder50_week12=single_metrics[1],
-            mmd_lt15_week12=single_metrics[2],
-            target_mean_mmd_week12=target.mean_mmd_week12,
-            target_responder50_week12=target.responder50_week12,
-            target_mmd_lt15_week12=target.mmd_lt15_week12,
-            objective_value=single_obj,
-        )
-
-    if _target_state_shares(inputs, arm, target) is not None:
-        state_week12, state_params, state_obj = _state_informed_week12(inputs, arm, baseline_mmd, rng, target)
-        state_metrics = _metrics(baseline_mmd, state_week12)
-        return CalibrationResult(
-            arm=arm,
-            method="state_distribution_rank_calibration",
-            parameters=state_params,
-            week12_mmd=state_week12,
-            mean_mmd_week12=state_metrics[0],
-            responder50_week12=state_metrics[1],
-            mmd_lt15_week12=state_metrics[2],
-            target_mean_mmd_week12=target.mean_mmd_week12,
-            target_responder50_week12=target.responder50_week12,
-            target_mmd_lt15_week12=target.mmd_lt15_week12,
-            objective_value=state_obj,
-        )
-
-    z1 = rng.standard_normal(n)
-    z2 = rng.standard_normal(n)
-    u = rng.random(n)
-
-    def mixture_objective(x: np.ndarray) -> float:
-        week12 = _mixture_week12(baseline_mmd, z1, z2, u, x)
-        penalty = 0.0
-        if x[2] <= 0 or x[4] <= 0:
-            penalty += 1e6
-        return _objective(_metrics(baseline_mmd, week12), target) + _state_share_penalty(
-            inputs, arm, week12, target
-        ) + penalty
-
-    bounds = [
-        (0.03, 0.97),
-        (-25.0, 5.0),
-        (0.15, 12.0),
-        (-25.0, 5.0),
-        (0.15, 12.0),
-    ]
-    initial_candidates = [
-        np.array([0.55, target.observed_mmd_change_week12 - 3.0, 2.5, target.observed_mmd_change_week12 + 2.0, 4.0]),
-        np.array([0.45, target.observed_mmd_change_week12 - 4.0, 2.0, target.observed_mmd_change_week12 + 1.0, 5.0]),
-        np.array([0.65, target.observed_mmd_change_week12 - 2.5, 2.0, target.observed_mmd_change_week12 + 4.0, 3.5]),
-    ]
-    best_x = None
-    best_obj = float("inf")
-    for candidate in initial_candidates:
-        fit = minimize(mixture_objective, candidate, method="Nelder-Mead", options={"maxiter": 900})
-        x = np.array(fit.x, dtype=float)
-        x = np.array([min(max(v, low), high) for v, (low, high) in zip(x, bounds)], dtype=float)
-        obj = mixture_objective(x)
-        if obj < best_obj:
-            best_x = x
-            best_obj = obj
-
-    if best_obj > single_obj:
-        de_fit = differential_evolution(
-            mixture_objective,
-            bounds=bounds,
-            seed=int(rng.integers(0, 2**31 - 1)),
-            maxiter=60,
-            polish=True,
-            updating="immediate",
-        )
-        if float(de_fit.fun) < best_obj:
-            best_x = np.array(de_fit.x, dtype=float)
-            best_obj = float(de_fit.fun)
-
-    assert best_x is not None
-    mixture_week12 = _mixture_week12(baseline_mmd, z1, z2, u, best_x)
-    mixture_metrics = _metrics(baseline_mmd, mixture_week12)
-    mixture_obj = _objective(mixture_metrics, target) + _state_share_penalty(
-        inputs, arm, mixture_week12, target
-    )
-
-    if single_obj <= mixture_obj:
-        return CalibrationResult(
-            arm=arm,
-            method="single_normal_change",
-            parameters={
-                "mean_change": float(single_params[0]),
-                "sd_change": float(np.exp(single_params[1])),
-            },
-            week12_mmd=single_week12,
-            mean_mmd_week12=single_metrics[0],
-            responder50_week12=single_metrics[1],
-            mmd_lt15_week12=single_metrics[2],
-            target_mean_mmd_week12=target.mean_mmd_week12,
-            target_responder50_week12=target.responder50_week12,
-            target_mmd_lt15_week12=target.mmd_lt15_week12,
-            objective_value=single_obj,
-        )
-    return CalibrationResult(
-        arm=arm,
-        method="two_component_normal_change",
-        parameters={
-            "mix_weight_component1": float(best_x[0]),
-            "mean_change_component1": float(best_x[1]),
-            "sd_change_component1": float(best_x[2]),
-            "mean_change_component2": float(best_x[3]),
-            "sd_change_component2": float(best_x[4]),
-        },
-        week12_mmd=mixture_week12,
-        mean_mmd_week12=mixture_metrics[0],
-        responder50_week12=mixture_metrics[1],
-        mmd_lt15_week12=mixture_metrics[2],
-        target_mean_mmd_week12=target.mean_mmd_week12,
-        target_responder50_week12=target.responder50_week12,
-        target_mmd_lt15_week12=target.mmd_lt15_week12,
-        objective_value=mixture_obj,
     )

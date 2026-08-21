@@ -41,7 +41,7 @@ Weighted acute rescue daily cost: 31.7499 CNY/day
 
 ## Run the formal analysis
 
-The command below runs the base case, one-way sensitivity analysis, probabilistic sensitivity analysis with 1000 iterations, scenario analyses, and threshold price analysis.
+The command below runs the base case, calibration robustness analysis across prespecified target weights, one-way sensitivity analysis, probabilistic sensitivity analysis with 1000 iterations, scenario analyses, and threshold price analysis.
 
 ```bash
 python run_model.py --analysis all --psa-iterations 1000 --psa-workers 16 --calibration-mode frozen --language en --output-dir results
@@ -57,13 +57,22 @@ Outputs are written to:
 - `results/figures/baseline_mmd_distribution.png`
 - `results/figures/week12_mmd_continuous_distribution.png`
 - `results/figures/week12_mmd_distribution.png`
+- `results/figures/calibration_robustness.png`
+
+The workbook includes `Calibration_Robustness` and `Calibration_Summary` sheets. Their ranges describe the observed results across prespecified target weights and are not confidence or credible intervals.
+
+To run only the base case plus calibration robustness analysis:
+
+```bash
+python run_model.py --analysis calibration --calibration-patients 10000 --seed 314159 --output-dir results_calibration
+```
 
 ## Fast smoke test
 
 Use this command to confirm the full workflow without running a full PSA:
 
 ```bash
-python run_model.py --analysis all --n-patients 2000 --owsa-patients 1000 --psa-iterations 4 --psa-patients 1000 --psa-workers 2 --seed 314159 --calibration-mode frozen --language en --output-dir results_smoke
+python run_model.py --analysis all --n-patients 2000 --calibration-patients 500 --owsa-patients 1000 --psa-iterations 4 --psa-patients 1000 --psa-workers 2 --seed 314159 --calibration-mode frozen --language en --output-dir results_smoke
 ```
 
 ## Recalibration
@@ -71,13 +80,17 @@ python run_model.py --analysis all --n-patients 2000 --owsa-patients 1000 --psa-
 Routine runs use frozen Week 12 calibration parameters stored in `data/calibration_parameters.csv`. Recalibration is only needed after changing baseline MMD distribution settings or Week 12 calibration targets.
 
 ```bash
-python calibrate_model.py --method continuous --data-dir data --output data/calibration_parameters.csv
+python calibrate_model.py --data-dir data --output data/calibration_parameters.csv
 ```
 
-The legacy state-distribution calibration method is retained only for validation scenario analysis:
+## Post-Week-12 extrapolation
+
+The maintenance-period model simulates treatment discontinuation at patient level. Patients remaining on treatment retain their Week-12 effect. Treatment discontinuers are assigned to lack of efficacy or another reason using the observed counts from the 52-week open-label extension. Lack-of-efficacy discontinuers return immediately to their paired comparator level; other-reason discontinuers retain 91%, 64%, and 45% of positive incremental benefit in the first three 4-week cycles after discontinuation, with no retained benefit thereafter. Drug cost stops after discontinuation, while clinical benefit can persist temporarily.
+
+Run the model tests with:
 
 ```bash
-python calibrate_model.py --method state --data-dir data --output data/calibration_parameters.csv
+python -m unittest discover -s tests -v
 ```
 
 ## License

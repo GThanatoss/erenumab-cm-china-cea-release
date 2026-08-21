@@ -157,7 +157,17 @@ class ModelData:
         if missing_tables:
             errors.append(f"Missing required tables: {sorted(missing_tables)}")
 
-        source_ids = {str(row["source_id"]) for row in self.tables.get("sources", []) if row.get("source_id")}
+        source_rows = self.tables.get("sources", [])
+        if source_rows:
+            source_columns = set(source_rows[0])
+            expected_source_columns = {"source_id", "reference"}
+            if source_columns != expected_source_columns:
+                errors.append(
+                    "sources.csv must contain exactly the columns source_id and reference"
+                )
+        source_ids = {str(row["source_id"]) for row in source_rows if row.get("source_id")}
+        if len(source_ids) != len(source_rows):
+            errors.append("sources.csv source_id values must be non-empty and unique")
         for table_name, rows in self.tables.items():
             if table_name == "sources" or not rows or "source_id" not in rows[0]:
                 continue
@@ -176,12 +186,16 @@ class ModelData:
             if not isinstance(utility, (int, float)) or not 0 <= float(utility) <= 1:
                 errors.append(f"Invalid utility in mmd_states: {row}")
 
-        for arm_column in ("calibration_start_erenumab", "calibration_start_bsc"):
-            state_rows = self.tables.get("mmd_states", [])
-            if state_rows and arm_column in state_rows[0]:
-                total = sum(float(row.get(arm_column) or 0) for row in state_rows)
-                if abs(total - 1.0) > 1e-6:
-                    errors.append(f"{arm_column} sums to {total:.6f}, expected 1.0")
+        robustness = self.config.get("calibration_robustness", {})
+        weights = robustness.get("mmd_lt15_weights")
+        if not isinstance(weights, list) or not weights:
+            errors.append("calibration_robustness.mmd_lt15_weights must be a non-empty list")
+        elif any(not isinstance(value, (int, float)) or float(value) < 0.0 for value in weights):
+            errors.append("calibration_robustness.mmd_lt15_weights must be nonnegative numbers")
+        for key in ("primary_mean_mmd_tolerance", "primary_responder50_tolerance"):
+            value = robustness.get(key)
+            if not isinstance(value, (int, float)) or float(value) <= 0.0:
+                errors.append(f"calibration_robustness.{key} must be positive")
 
         cost_ids = self.by_id("cost_parameters") if "cost_parameters" in self.tables else {}
         for required_id in ("erenumab_price_per_4w", "non_drug_medical_service_cost_per_4w_2025"):
@@ -250,6 +264,36 @@ class ModelData:
                                     f"{column}={recorded} does not match acute_rescue_drug_costs derived "
                                     f"{derived_value:.6f}"
                                 )
+
+        discontinuation_ids = (
+            self.by_id("discontinuation_parameters") if "discontinuation_parameters" in self.tables else {}
+        )
+        discontinuation_cfg = self.config.get("discontinuation", {})
+        for config_key in ("short_term_rule", "maintenance_rule", "lack_efficacy_share_rule"):
+            parameter_id = str(discontinuation_cfg.get(config_key) or "")
+            if not parameter_id or parameter_id not in discontinuation_ids:
+                errors.append(f"Missing discontinuation parameter configured by '{config_key}': {parameter_id}")
+                continue
+            value = discontinuation_ids[parameter_id].get("original_value")
+            if not isinstance(value, (int, float)) or not 0 <= float(value) <= 1:
+                errors.append(f"Invalid probability for discontinuation parameter '{parameter_id}': {value}")
+
+        retention_profile = discontinuation_cfg.get("retained_effect_fractions_by_cycle")
+        if not isinstance(retention_profile, list) or not retention_profile:
+            errors.append("discontinuation.retained_effect_fractions_by_cycle must be a non-empty list")
+        else:
+            try:
+                retention_values = [float(value) for value in retention_profile]
+            except (TypeError, ValueError):
+                errors.append("Post-discontinuation retained-effect fractions must be numeric")
+            else:
+                if any(value < 0 or value > 1 for value in retention_values):
+                    errors.append("Post-discontinuation retained-effect fractions must be between 0 and 1")
+                if any(left < right for left, right in zip(retention_values, retention_values[1:])):
+                    errors.append("Post-discontinuation retained-effect fractions must be non-increasing")
+        terminal_retention = discontinuation_cfg.get("retained_effect_fraction_after_profile")
+        if not isinstance(terminal_retention, (int, float)) or float(terminal_retention) != 0.0:
+            errors.append("retained_effect_fraction_after_profile must be 0 for complete effect loss")
 
         scenarios = self.by_id("scenario_settings") if "scenario_settings" in self.tables else {}
         if "basecase" not in scenarios:

@@ -26,7 +26,7 @@ For each arm, simulated patients receive a baseline MMD value and calibrated Wee
 - 20-23 MMD
 - 24-28 MMD
 
-The final state keeps the utility previously assigned to the 24-30 MMD state, but the upper bound is set to 28 days to match a 4-week cycle.
+The 24-28 MMD state uses a utility of 0.38 and an upper bound of 28 days to match a 4-week cycle.
 
 ## Baseline MMD
 
@@ -36,7 +36,7 @@ Baseline MMD is sampled from a truncated normal distribution bounded at 8 and 28
 
 Routine analysis uses frozen continuous Week 12 calibration parameters from `data/calibration_parameters.csv`.
 
-The main calibration method generates Week 12 MMD as a continuous outcome rather than directly assigning patients to MMD utility states. The calibrated Week 12 distribution is represented by a two-component truncated-normal marginal distribution and a rank-ordering parameter linking Week 12 MMD to baseline MMD.
+The continuous calibration method generates Week 12 MMD as a continuous outcome rather than directly assigning patients to MMD utility states. The calibrated Week 12 distribution is represented by a two-component truncated-normal marginal distribution and a rank-ordering parameter linking Week 12 MMD to baseline MMD.
 
 The calibration targets are:
 
@@ -44,23 +44,24 @@ The calibration targets are:
 - Week 12 >=50% MMD responder rate.
 - Week 12 MMD<15 proportion.
 
-MMD utility states are used after calibration for utility mapping and diagnostic reporting. They are not used as direct calibration targets in the main analysis.
+MMD utility states are used after calibration for utility mapping and diagnostic reporting. They are not used as direct calibration targets.
+
+Week 12 mean MMD and the >=50% MMD responder rate are treated as primary calibration targets. MMD<15 is a secondary soft target because its source endpoint was defined using headache days rather than MMD. The base-case objective weight for this soft target is 0.6; this numerical fitting weight is not interpreted as a clinical standard error or probability.
 
 ## Discontinuation
 
-Short-term discontinuation uses the 0-12 week double-blind all-cause discontinuation rate from DRAGON. Long-term maintenance discontinuation uses the all-cause discontinuation reported in Tepper et al.'s 52-week open-label extension study; the reported 25.9% value corresponds to the 64-week total study period, comprising the 12-week double-blind phase plus the 52-week open-label extension.
+Short-term discontinuation uses the 0-12 week double-blind all-cause discontinuation rate from DRAGON. Maintenance discontinuation uses the investigational-product discontinuation reported in Tepper et al.'s 52-week open-label treatment phase: 139/609 patients (22.8%) discontinued open-label treatment. This is distinct from the 158/609 patients (25.9%) who discontinued the overall study. The 22.8% treatment-discontinuation probability is converted to a constant 4-week probability of 1.9709% and is applied after Week 12 only to patients who remain on treatment.
 
-During Weeks 0-12, observed trial effects are retained and discontinuation does not further reduce efficacy or acute medication use. After Week 12, erenumab drug cost follows the open-label all-cause discontinuation rate. Erenumab MMD and acute medication days gradually move toward the no-preventive-treatment arm according to the additional cumulative discontinuation beyond the short-term discontinuation rate.
+During Weeks 0-12, observed trial effects are retained and discontinuation does not further reduce efficacy or acute medication use. Drug cost is charged only while the patient is on treatment. After Week 12, clinical effects are extrapolated at patient level. Patients who remain on treatment retain their Week-12 MMD and acute-medication levels.
 
-For maintenance cycle `k`, the model uses:
+Among the 139 treatment discontinuations in the open-label study, 39 (28.1%) were due to lack of efficacy. Each simulated discontinuation is therefore assigned to lack of efficacy with probability 39/139 and to another reason otherwise. A patient who discontinues for lack of efficacy returns immediately to the paired comparator Week-12 level. For other-reason discontinuers, define the patient's positive Week-12 incremental MMD benefit as:
 
 ```text
-D_short(k) = 1 - (1 - p_short)^k
-D_long(k) = 1 - (1 - p_long)^k
-q(k) = max(0, D_long(k) - D_short(k))
+delta_i = max(0, MMD_comparator_i_week12 - MMD_erenumab_i_week12)
+MMD_i(s) = MMD_erenumab_i_week12 + (1 - R(s)) * delta_i
 ```
 
-Erenumab MMD and acute medication use are then shifted toward the comparator arm by `q(k)`.
+The retained-effect fractions are `R(1)=0.91`, `R(2)=0.64`, `R(3)=0.45`, and `R(s>=4)=0`. Acute medication days use the same patient-level discontinuation state, reason, and retained-effect profile. Consequently, drug acquisition cost stops after discontinuation while clinical benefit can persist temporarily.
 
 ## Costing
 
@@ -82,12 +83,18 @@ Adverse event costs are not included in the base case.
 
 One-way sensitivity analysis varies model parameters over predefined ranges and reports INMB at the 3x GDP per capita willingness-to-pay threshold. Week 12 MMD change is the only Week 12 efficacy input varied in OWSA; changing it triggers recalibration.
 
-PSA samples clinical probabilities and utilities from beta or beta-PERT distributions, costs from gamma distributions where applicable, and MMD change from normal distributions. Utility sampling is sorted within each PSA iteration to preserve monotonicity across MMD states.
+PSA samples clinical probabilities and utilities from beta or beta-PERT distributions, costs from gamma distributions where applicable, and MMD change from normal distributions. The erenumab price is sampled from a gamma distribution with mean CNY 3,498 per 70 mg box. Its dispersion is derived from an assumed uncertainty range of CNY 2,798.4 to CNY 4,197.6 (plus or minus 20% of the base-case price); this assumption is not a statistical confidence interval. Utility sampling is sorted within each PSA iteration to preserve monotonicity across MMD states.
+
+The 52-week treatment-discontinuation probability and the conditional lack-of-efficacy share are included in OWSA and PSA using the observed counts from the open-label study. The retained-effect profile is treated as structural uncertainty rather than assigned an unsupported probability distribution.
+
+A separate calibration robustness analysis across prespecified target weights evaluates whether the economic conclusion depends on how strongly the secondary MMD<15 target influences calibration. It uses the base-case two-component continuous distribution, parameter bounds, primary targets, patient cohort, extrapolation, costing, and utility mapping. The MMD<15 objective weight is varied over the prespecified values 0, 0.15, 0.3, 0.6, 1.2, 2.4, and 4.8. Each candidate calibration is fitted using common random numbers and evaluated on the common base-case cohort. Candidate pairs are classified as compatible with the primary evidence when both arm-specific mean-MMD residuals are within 0.5 days and both responder-rate residuals are within 0.03. MMD<15 is reported but is not used as an acceptance criterion because of the endpoint-definition mismatch.
+
+The calibration robustness analysis reports the observed minimum and maximum incremental QALY, ICER, and INMB across primary-compatible prespecified target weights. These ranges are deterministic structural-robustness results, not confidence intervals, credible intervals, or posterior calibration distributions. The frozen base-case calibration is used for the base case and PSA; the weight analysis is reported separately.
 
 Scenario analyses include:
 
 - 12-week time horizon.
-- Legacy state-distribution Week 12 calibration.
+- Immediate post-discontinuation loss of positive incremental benefit.
 - Threshold erenumab price at 1x and 3x GDP per capita willingness-to-pay thresholds.
 
 ## Outputs
@@ -97,6 +104,7 @@ The model writes an Excel workbook and publication-style figures:
 - Base-case results.
 - Cycle trace.
 - Calibration diagnostics.
+- Calibration robustness results across prespecified target weights, a primary-compatible outcome range summary, and a calibration-versus-economic-outcome figure.
 - OWSA table and tornado diagram.
 - PSA iterations, CEAC, and incremental cost-effectiveness scatter plot.
 - Threshold price table and INMB-price figure.

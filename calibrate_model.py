@@ -19,12 +19,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--n-patients", type=int, default=None, help="Calibration patient count.")
     parser.add_argument("--seed", type=int, default=None, help="Calibration random seed.")
-    parser.add_argument(
-        "--method",
-        choices=["continuous", "state"],
-        default="continuous",
-        help="Calibration method to freeze. 'state' is retained only for legacy validation.",
-    )
     return parser.parse_args()
 
 
@@ -40,7 +34,6 @@ def main() -> int:
         inputs,
         n_patients=n_patients,
         seed=seed,
-        calibration_method=args.method,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     rows.to_csv(output_path, index=False, encoding="utf-8-sig")

@@ -25,6 +25,8 @@ ZH_SHEET_NAMES = {
     "Basecase_Results": "Basecase_Results",
     "Cycle_Trace": "Cycle_Trace",
     "Calibration_Diagnostics": "Calibration_Diagnostics",
+    "Calibration_Robustness": "Calibration_Robustness",
+    "Calibration_Summary": "Calibration_Summary",
     "OWSA": "OWSA",
     "PSA_Results": "PSA_Results",
     "CEAC": "Cost-effectiveness acceptability curve",
@@ -52,6 +54,9 @@ ZH_COLUMNS = {
     "week12_mean_mmd": "Week 12 mean MMD",
     "week12_responder50": "Week 12 >=50% MMD responder rate",
     "week12_mmd_lt15": "Week 12 MMD<15 proportion",
+    "end_horizon_on_treatment_rate": "End-of-horizon on-treatment rate",
+    "end_horizon_discontinued_lack_efficacy_rate": "End-of-horizon discontinued for lack of efficacy",
+    "end_horizon_discontinued_other_reason_rate": "End-of-horizon discontinued for other reasons",
     "nmb_1x_gdp_cny": "1x GDP NMB",
     "nmb_3x_gdp_cny": "3x GDP NMB",
     "inmb_1x_gdp_cny": "1x GDP INMB",
@@ -65,6 +70,12 @@ ZH_COLUMNS = {
     "qaly": "QALY",
     "acute_medication_days": "Acute medication days",
     "erenumab_on_treatment_rate": "erenumabon-treatment rate",
+    "erenumab_on_treatment_rate_end": "erenumab on-treatment rate at cycle end",
+    "discontinued_lack_efficacy_rate_start": "discontinued for lack of efficacy at cycle start",
+    "discontinued_other_reason_rate_start": "discontinued for other reasons at cycle start",
+    "mean_retained_effect_fraction_other_discontinuers": "mean retained effect among other-reason discontinuers",
+    "new_discontinuation_rate_population_end": "new discontinuation rate in population at cycle end",
+    "new_discontinuation_rate_at_risk_end": "new discontinuation rate among patients at risk at cycle end",
     "share_S1": "S1share",
     "share_S2": "S2share",
     "share_S3": "S3share",
@@ -85,22 +96,24 @@ ZH_COLUMNS = {
     "rank_correlation_weight": "rank-correlation weight",
     "uses_frozen_calibration_parameters": "uses frozen calibration parameters",
     "calibration_seed": "calibration seed",
-    "state_value_seed": "state value seed",
     "uses_continuous_week12_distribution": "uses continuous Week 12 distribution",
     "mix_weight_low": "low-MMD component weight",
     "component_mean_low": "low-MMD component mean",
     "component_sd_low": "low-MMD component SD",
     "component_mean_high": "high-MMD component mean",
     "component_sd_high": "high-MMD component SD",
+    "analysis_id": "analysis ID",
+    "analysis_type": "analysis type",
+    "mmd_lt15_objective_weight": "MMD<15 soft-target objective weight",
+    "screening_n_patients": "calibration screening patients",
+    "evaluation_n_patients": "evaluation patients",
+    "primary_mean_mmd_tolerance": "primary mean-MMD tolerance",
+    "primary_responder50_tolerance": "primary responder-rate tolerance",
+    "primary_targets_compatible": "primary targets compatible",
+    "cost_effective_at_3x_gdp": "cost-effective at 3x GDP",
     "continuous_draw_seed": "continuous draw seed",
     "smoothness_penalty": "smoothness penalty",
     "local_continuity_penalty": "local continuity penalty",
-    "frozen_share_S1": "diagnostic S1 share",
-    "frozen_share_S2": "diagnostic S2 share",
-    "frozen_share_S3": "diagnostic S3 share",
-    "frozen_share_S4": "diagnostic S4 share",
-    "frozen_share_S5": "diagnostic S5 share",
-    "frozen_share_S6": "diagnostic S6 share",
     "parameter_id": "parameter ID",
     "name_cn": "parameter name",
     "base_value": "base value",
@@ -140,8 +153,10 @@ ZH_COLUMNS = {
     "comparator_total_cost": "comparator total cost",
     "comparator_total_qaly": "comparator total QALY",
     "sampled_acute_medication_cost_per_day": "sampled acute medication cost",
+    "sampled_erenumab_price_per_4w": "sampled erenumab price (CNY per 70 mg box)",
     "sampled_disc_allcause_12w": "sampled 0-12 week double-blind all-cause discontinuation rate",
-    "sampled_disc_allcause_64w": "sampled long-term all-cause discontinuation rate",
+    "sampled_disc_treatment_52w": "sampled 52-week open-label treatment discontinuation rate",
+    "sampled_disc_lack_efficacy_share": "sampled conditional lack-of-efficacy discontinuation share",
     "sampled_mmd_change_w12_bsc": "sampled Week 12 MMD change(No preventive treatment)",
     "sampled_mmd_change_w12_erenumab_plus_bsc": "sampled Week 12 MMD change(Erenumab preventive treatment)",
     "sampled_mmd_lt15_week12_bsc": "sampled Week 12 MMD<15 proportion(No preventive treatment)",
@@ -235,7 +250,6 @@ ZH_VALUES = {
     "sourced": "Sourced",
     "derived": "Derived",
     "base_case_assumption": "Base-case assumption",
-    "frozen_state_distribution_rank_calibration": "Frozen state-distribution rank calibration",
     "frozen_smooth_continuous_mmd_calibration": "Frozen smooth continuous MMD calibration",
     "smooth_continuous_mmd_calibration": "Smooth continuous MMD calibration",
     "owsa_tornado": "One-way sensitivity tornado diagram",
@@ -245,7 +259,6 @@ ZH_VALUES = {
     "baseline_mmd_distribution": "Baseline MMD distribution plot",
     "week12_mmd_continuous_distribution": "Calibrated Week 12 continuous MMD distribution plot",
     "week12_mmd_distribution": "Calibrated Week 12 MMD state-share plot",
-    "Legacy state-distribution calibration": "Legacy state-distribution calibration scenario",
     "12-week time horizon": "12-week time horizon scenario",
     "Threshold price at 1x gdp WTP": "Threshold price at 1x GDP WTP",
     "Threshold price at 3x gdp WTP": "Threshold price at 3x GDP WTP",
@@ -265,7 +278,8 @@ ZH_PARAMETER_NAMES = {
     "mmd_change_w12_bsc": "Week 12 MMD change(No preventive treatment)",
     "utility_4_9": "4-9 MMD utility",
     "disc_allcause_12w": "Short-term all-cause discontinuation rate",
-    "disc_allcause_64w": "Long-term all-cause discontinuation rate",
+    "disc_treatment_52w": "52-week treatment discontinuation rate",
+    "disc_lack_efficacy_share": "Lack-of-efficacy share among discontinuations",
     "utility_20_23": "20-23 MMD utility",
     "utility_15_19": "15-19 MMD utility",
     "utility_0_3": "0-3 MMD utility",
@@ -280,15 +294,15 @@ ZH_PARAMETER_NAMES = {
 
 
 def _zh_font_family() -> str:
-    for font_path in [
-        Path("C:/Windows/Fonts/NotoSansSC-VF.ttf"),
-        Path("C:/Windows/Fonts/msyh.ttc"),
-        Path("C:/Windows/Fonts/simhei.ttf"),
-        Path("C:/Windows/Fonts/simsun.ttc"),
-    ]:
-        if font_path.exists():
-            font_manager.fontManager.addfont(str(font_path))
-            return font_manager.FontProperties(fname=str(font_path)).get_name()
+    for family in ("Noto Sans CJK SC", "Microsoft YaHei", "SimHei", "SimSun"):
+        try:
+            font_manager.findfont(
+                font_manager.FontProperties(family=family),
+                fallback_to_default=False,
+            )
+            return family
+        except ValueError:
+            continue
     return "DejaVu Sans"
 
 
@@ -373,7 +387,8 @@ def _publishable_parameter_name(parameter_id: str, language: str = "en") -> str:
         "mmd_change_w12_bsc": "Week 12 MMD change (no preventive treatment)",
         "utility_4_9": "Utility of 4-9 MMD",
         "disc_allcause_12w": "Short-term all-cause discontinuation rate",
-        "disc_allcause_64w": "Long-term all-cause discontinuation rate",
+        "disc_treatment_52w": "52-week open-label treatment discontinuation rate",
+        "disc_lack_efficacy_share": "Conditional lack-of-efficacy discontinuation share",
         "utility_20_23": "Utility of 20-23 MMD",
         "utility_15_19": "Utility of 15-19 MMD",
         "utility_0_3": "Utility of 0-3 MMD",
@@ -834,6 +849,131 @@ def _draw_threshold_price_inmb(
     return path
 
 
+def _draw_calibration_robustness(
+    output_dir: Path,
+    inputs: ModelInputs,
+    calibration_robustness: pd.DataFrame,
+    language: str,
+) -> Path:
+    candidates = calibration_robustness.loc[
+        calibration_robustness["analysis_type"] == "prespecified_target_weight"
+    ].sort_values("mmd_lt15_objective_weight")
+    reference = calibration_robustness.loc[
+        calibration_robustness["analysis_type"] == "basecase_reference"
+    ].iloc[0]
+    weights = candidates["mmd_lt15_objective_weight"].to_numpy(dtype=float)
+    compatible = candidates["primary_targets_compatible"].to_numpy(dtype=bool)
+
+    with plt.rc_context(_font_context(language)):
+        fig, axes = plt.subplots(1, 3, figsize=(16.5, 5.2))
+        fig.suptitle(
+            "Calibration robustness analysis across prespecified target weights",
+            fontsize=16,
+            fontweight="bold",
+        )
+        fig.subplots_adjust(left=0.09, right=0.98, top=0.80, bottom=0.18, wspace=0.32)
+        intervention_color = "#2166AC"
+        comparator_color = "#B2182B"
+
+        axes[0].plot(
+            weights,
+            candidates["erenumab_mmd_lt15"],
+            marker="o",
+            color=intervention_color,
+            label=INTERVENTION_LABEL_EN,
+        )
+        axes[0].plot(
+            weights,
+            candidates["comparator_mmd_lt15"],
+            marker="s",
+            color=comparator_color,
+            label=COMPARATOR_LABEL_EN,
+        )
+        axes[0].axhline(
+            float(inputs.config["calibration_targets"][inputs.intervention_arm]["mmd_lt15_week12"]),
+            color=intervention_color,
+            linestyle="--",
+            linewidth=1.2,
+        )
+        axes[0].axhline(
+            float(inputs.config["calibration_targets"][inputs.comparator_arm]["mmd_lt15_week12"]),
+            color=comparator_color,
+            linestyle="--",
+            linewidth=1.2,
+        )
+        axes[0].yaxis.set_major_formatter(PercentFormatter(1.0))
+        axes[0].set_title("A. Calibrated proportion with MMD <15", fontweight="bold")
+        axes[0].set_ylabel("Proportion")
+        axes[0].legend(frameon=False, fontsize=9)
+
+        axes[1].plot(
+            weights,
+            candidates["incremental_qaly"],
+            marker="o",
+            color=intervention_color,
+        )
+        axes[1].axhline(
+            float(reference["incremental_qaly"]),
+            color="#777777",
+            linestyle="--",
+            linewidth=1.2,
+            label="Base case",
+        )
+        axes[1].set_title("B. Incremental QALYs", fontweight="bold")
+        axes[1].set_ylabel("QALY")
+        axes[1].legend(frameon=False, fontsize=9)
+
+        axes[2].plot(
+            weights,
+            candidates["icer_cny_per_qaly"] / 1_000_000.0,
+            marker="o",
+            color=intervention_color,
+        )
+        axes[2].axhline(
+            float(reference["icer_cny_per_qaly"]) / 1_000_000.0,
+            color="#777777",
+            linestyle="--",
+            linewidth=1.2,
+            label="Base case",
+        )
+        axes[2].axhline(
+            float(inputs.config["model"]["wtp_3x_gdp_cny_per_qaly"]) / 1_000_000.0,
+            color="#777777",
+            linestyle=":",
+            linewidth=1.5,
+            label="3× GDP WTP",
+        )
+        axes[2].set_title("C. ICER", fontweight="bold")
+        axes[2].set_ylabel("Million CNY/QALY")
+        axes[2].legend(frameon=False, fontsize=9)
+
+        if np.any(~compatible):
+            for ax, values in (
+                (axes[1], candidates["incremental_qaly"].to_numpy(dtype=float)),
+                (axes[2], candidates["icer_cny_per_qaly"].to_numpy(dtype=float) / 1_000_000.0),
+            ):
+                ax.scatter(
+                    weights[~compatible],
+                    values[~compatible],
+                    facecolors="white",
+                    edgecolors="#D73027",
+                    linewidths=1.5,
+                    s=80,
+                    zorder=4,
+                )
+
+        for ax in axes:
+            ax.set_xlabel("MMD<15 soft-target weight")
+            ax.grid(axis="y", color="#D9D9D9", linestyle="--", linewidth=0.8, alpha=0.8)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+    path = output_dir / "calibration_robustness.png"
+    with plt.rc_context(_font_context(language)):
+        fig.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
 def write_figures(
     output_dir: Path,
     inputs: ModelInputs,
@@ -841,6 +981,7 @@ def write_figures(
     owsa: pd.DataFrame | None,
     psa_results: pd.DataFrame | None,
     ceac: pd.DataFrame | None,
+    calibration_robustness: pd.DataFrame | None = None,
     threshold_prices: pd.DataFrame | None = None,
     language: str = "en",
 ) -> dict[str, Path]:
@@ -857,6 +998,14 @@ def write_figures(
     figures["week12_mmd_distribution"] = _draw_week12_mmd_distribution(
         figure_dir, inputs, base_output, language
     )
+
+    if calibration_robustness is not None and not calibration_robustness.empty:
+        figures["calibration_robustness"] = _draw_calibration_robustness(
+            figure_dir,
+            inputs,
+            calibration_robustness,
+            language,
+        )
 
     if owsa is not None and not owsa.empty:
         plot_data = (
@@ -1067,6 +1216,8 @@ def write_results_workbook(
     owsa: pd.DataFrame | None = None,
     psa_results: pd.DataFrame | None = None,
     ceac: pd.DataFrame | None = None,
+    calibration_robustness: pd.DataFrame | None = None,
+    calibration_summary: pd.DataFrame | None = None,
     scenario_results: pd.DataFrame | None = None,
     threshold_prices: pd.DataFrame | None = None,
     figures: dict[str, Path] | None = None,
@@ -1091,6 +1242,12 @@ def write_results_workbook(
         _translate_frame(base_output.calibration_diagnostics, language).to_excel(
             writer, sheet_name=_sheet_name("Calibration_Diagnostics", language), index=False
         )
+        _translate_frame(
+            calibration_robustness if calibration_robustness is not None else pd.DataFrame(), language
+        ).to_excel(writer, sheet_name=_sheet_name("Calibration_Robustness", language), index=False)
+        _translate_frame(
+            calibration_summary if calibration_summary is not None else pd.DataFrame(), language
+        ).to_excel(writer, sheet_name=_sheet_name("Calibration_Summary", language), index=False)
         _translate_frame(owsa if owsa is not None else pd.DataFrame(), language).to_excel(
             writer, sheet_name=_sheet_name("OWSA", language), index=False
         )

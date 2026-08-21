@@ -23,19 +23,24 @@ mmd_lt15_w12_bsc,calibration_target,0.410,proportion,beta 114 164,S_DRAGON_POSTH
 acute_med_days_baseline,acute_medication,14.30,days per 4 weeks,fixed,S_DRAGON,acute_rescue_cost,Common pooled baseline
 acute_med_days_w12_erenumab,acute_medication,8.96,days per 4 weeks,fixed,S_DRAGON,acute_rescue_cost,Week 12 value from pooled baseline minus observed change
 acute_med_days_w12_bsc,acute_medication,9.64,days per 4 weeks,fixed,S_DRAGON,acute_rescue_cost,Week 12 value from pooled baseline minus observed change
-erenumab_price_per_4w,cost,3498,CNY per 70 mg box,OWSA +/-20%; threshold scenario,S_PRICE_ERE,drug_cost,One box per 4-week cycle while on treatment
+erenumab_price_per_4w,cost,3498,CNY per 70 mg box,gamma PSA based on assumed +/-20% uncertainty range; OWSA +/-20%; threshold scenario,S_PRICE_ERE,drug_cost,One box per 4-week cycle while on treatment; the assumed range is not a statistical confidence interval
 acute_medication_cost_per_day,cost,31.749900,CNY/day,gamma PSA; range 28.066126 to 36.391239,S_HUANG_2024;S_REPRESENTATIVE_DAILY_COSTS,acute_rescue_cost,Weighted from acute rescue category proportions and daily costs
 non_drug_medical_service_cost_per_4w_2025,cost,6.212423,CNY per 4 weeks,gamma PSA,S_CHIRA;S_MEDICAL_SERVICE_CPI,non_drug_cost,Derived from annual 2025 cost divided by 13 cycles
 chira_diagnosis_nondrug_cost_usd,cost_source,10.5,USD/year,fixed,S_CHIRA,non_drug_cost,Source component before exchange-rate conversion and CPI adjustment
 chira_exchange_rate,cost_source,6.697,CNY/USD,fixed,S_CHIRA,non_drug_cost,Exchange-rate conversion
 medical_service_cpi_adjustment_2017_to_2025,cost_source,1.1485098963,multiplier,fixed,S_MEDICAL_SERVICE_CPI,non_drug_cost,CPI inflation factor
 disc_allcause_12w,discontinuation,0.021505,proportion,beta 6 273; OWSA +/-20%,S_DRAGON,short_term_discontinuation,Converted to 4-week probability 0.007220
-disc_allcause_64w,discontinuation,0.259,proportion,beta 158 451; OWSA +/-20%,S_OLE_64W,maintenance_discontinuation,158/609 discontinued over the 64-week total study period in the Tepper 52-week open-label extension study; converted to 4-week probability 0.018560
+disc_treatment_52w,discontinuation,0.228,proportion,beta 139 470; OWSA +/-20%,S_OLE_52W,maintenance_treatment_discontinuation,139/609 discontinued open-label treatment during the 52-week extension; converted to 4-week probability 0.0197086 and applied after Week 12
+disc_lack_efficacy_share,discontinuation_reason,0.2807017544,conditional proportion,beta 39 100; OWSA +/-20%,S_OLE_52W,discontinuation_reason_assignment,39/139 treatment discontinuations were due to lack of efficacy
+retained_effect_cycle_1,post_discontinuation_effect,0.91,proportion,structural assumption,S_STRUCTURAL_ASSUMPTION,post_discontinuation_effect,Positive incremental benefit retained in the first 4-week cycle after other-reason discontinuation
+retained_effect_cycle_2,post_discontinuation_effect,0.64,proportion,structural assumption,S_STRUCTURAL_ASSUMPTION,post_discontinuation_effect,Positive incremental benefit retained in the second 4-week cycle after other-reason discontinuation
+retained_effect_cycle_3,post_discontinuation_effect,0.45,proportion,structural assumption,S_STRUCTURAL_ASSUMPTION,post_discontinuation_effect,Positive incremental benefit retained in the third 4-week cycle after other-reason discontinuation; zero thereafter
 utility_0_3,utility,0.71,QALY weight,beta-PERT range 0.60 to 0.82,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
 utility_4_9,utility,0.61,QALY weight,beta-PERT range 0.50 to 0.72,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
 utility_10_14,utility,0.57,QALY weight,beta-PERT range 0.46 to 0.68,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
 utility_15_19,utility,0.50,QALY weight,beta-PERT range 0.40 to 0.60,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
 utility_20_23,utility,0.48,QALY weight,beta-PERT range 0.38 to 0.58,S_US_CE,utility_mapping,PSA sorted to preserve monotonicity
-utility_24_28,utility,0.38,QALY weight,beta-PERT range 0.28 to 0.48,S_US_CE,utility_mapping,Retained from previous 24-30 MMD state
+utility_24_28,utility,0.38,QALY weight,beta-PERT range 0.28 to 0.48,S_US_CE,utility_mapping,Utility applied to the 24-28 MMD state
 cal_week12_erenumab,calibration_parameter,see data/calibration_parameters.csv,multiple,frozen,S_MODEL_CALIBRATION,week12_calibration,Continuous calibration parameters for erenumab arm
 cal_week12_bsc,calibration_parameter,see data/calibration_parameters.csv,multiple,frozen,S_MODEL_CALIBRATION,week12_calibration,Continuous calibration parameters for comparator arm
+calibration_target_weights,calibration_robustness,"0; 0.15; 0.3; 0.6; 1.2; 2.4; 4.8",objective weight,prespecified structural robustness analysis,S_MODEL_CALIBRATION,calibration_robustness,Secondary MMD<15 target weights; observed outcome range is not a confidence or credible interval and is reported separately from PSA

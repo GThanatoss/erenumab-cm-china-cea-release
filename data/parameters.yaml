@@ -69,6 +69,15 @@
     },
     "note": "mmd_lt15_week12 uses CM-to-EM from the DRAGON post hoc analysis as an approximation; original endpoint was based on monthly headache days."
   },
+  "calibration_robustness": {
+    "analysis_name": "Calibration robustness analysis across prespecified target weights",
+    "basecase_mmd_lt15_weight": 0.6,
+    "mmd_lt15_weights": [0.0, 0.15, 0.3, 0.6, 1.2, 2.4, 4.8],
+    "primary_mean_mmd_tolerance": 0.5,
+    "primary_responder50_tolerance": 0.03,
+    "range_interpretation": "Observed range across prespecified target weights; not a confidence or credible interval",
+    "application": "Separate structural robustness analysis; the frozen base-case calibration and PSA remain unchanged"
+  },
   "acute_medication": {
     "interpolation_method_basecase": "linear_baseline_to_week12",
     "cycle_cost_formula": "acute_med_days * weighted_acute_rescue_daily_cost_cny",
@@ -79,11 +88,16 @@
   "discontinuation": {
     "short_term_rule": "disc_allcause_12w",
     "short_term_application": "spread_over_first_3_cycles",
-    "maintenance_rule": "disc_allcause_64w",
+    "maintenance_rule": "disc_treatment_52w",
+    "maintenance_application": "apply_to_on_treatment_patients_after_week12",
+    "lack_efficacy_share_rule": "disc_lack_efficacy_share",
+    "discontinuation_reason_categories": ["lack_efficacy", "other"],
+    "retained_effect_fractions_by_cycle": [0.91, 0.64, 0.45],
+    "retained_effect_fraction_after_profile": 0.0,
     "post_discontinuation_cost_rule": "bsc_cost_only",
-    "post_discontinuation_utility_rule_basecase": "maintenance_effect_decays_by_extra_long_term_discontinuation",
-    "post_discontinuation_acute_medication_rule_basecase": "maintenance_acute_medication_days_decay_by_extra_long_term_discontinuation",
-    "maintenance_decay_formula": "q(k)=max(0,[1-(1-p_long)^k]-[1-(1-p_short)^k]); erenumab MMD and acute-medication days move toward No preventive treatment by q(k) after Week 12"
+    "post_discontinuation_utility_rule_basecase": "patient_level_reason_specific_effect_loss",
+    "post_discontinuation_acute_medication_rule_basecase": "patient_level_reason_specific_effect_loss",
+    "maintenance_effect_formula": "delta_i=max(0,MMD_comparator_i_week12-MMD_erenumab_i_week12); other-reason discontinuers use MMD_erenumab_i_week12+(1-R(s))*delta_i; lack-of-efficacy discontinuers return immediately to paired comparator Week-12 MMD"
   },
   "costing": {
     "erenumab_cost_rule_basecase": "one_70mg_box_per_4w_while_on_treatment",

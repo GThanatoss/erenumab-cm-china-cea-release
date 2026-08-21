@@ -15,6 +15,7 @@ from .calibration import (
 from .costs import (
     acute_medication_cost_per_day,
     discontinuation_cycle_probability,
+    discontinuation_probability_value,
     erenumab_price_per_cycle,
     non_drug_medical_service_cost_per_cycle,
 )
@@ -101,27 +102,78 @@ def _simulation_total_cycles(inputs: ModelInputs, settings: SimulationSettings) 
     return int(settings.total_cycles or inputs.total_cycles)
 
 
-def _maintenance_decay_fraction(cycle_after_week12: int, p_short: float, p_long: float) -> float:
-    if cycle_after_week12 <= 0:
-        return 0.0
-    d_short = 1.0 - (1.0 - p_short) ** cycle_after_week12
-    d_long = 1.0 - (1.0 - p_long) ** cycle_after_week12
-    return float(max(0.0, d_long - d_short))
+DISC_REASON_NONE = 0
+DISC_REASON_LACK_EFFICACY = 1
+DISC_REASON_OTHER = 2
 
 
-def _acute_days_for_cycle_with_decay(
-    inputs: ModelInputs,
-    arm: str,
+def _retention_profile(inputs: ModelInputs, overrides: dict[str, Any] | None) -> tuple[float, ...]:
+    if overrides and "_retention_profile" in overrides:
+        raw_profile = overrides["_retention_profile"]
+    else:
+        raw_profile = inputs.config["discontinuation"]["retained_effect_fractions_by_cycle"]
+    return tuple(float(value) for value in raw_profile)
+
+
+def _retained_effect_fraction(
+    cycles_since_discontinuation: np.ndarray,
+    retention_profile: tuple[float, ...],
+) -> np.ndarray:
+    cycles_since = np.asarray(cycles_since_discontinuation, dtype=int)
+    retained = np.zeros(cycles_since.shape, dtype=float)
+    for cycle_number, value in enumerate(retention_profile, start=1):
+        retained[cycles_since == cycle_number] = float(value)
+    return retained
+
+
+def _patient_level_maintenance_mmd(
+    intervention_week12_mmd: np.ndarray,
+    comparator_week12_mmd: np.ndarray,
     cycle: int,
-    p_short: float,
-    p_long: float,
-) -> float:
-    if cycle <= inputs.decision_tree_cycles or arm != inputs.intervention_arm:
-        return _acute_days_for_cycle(inputs, arm, cycle)
-    erenumab_week12 = acute_medication_day_value(inputs, inputs.intervention_arm, "week12")
-    bsc_week12 = acute_medication_day_value(inputs, inputs.comparator_arm, "week12")
-    q = _maintenance_decay_fraction(cycle - inputs.decision_tree_cycles, p_short, p_long)
-    return float(erenumab_week12 + q * (bsc_week12 - erenumab_week12))
+    discontinuation_reason: np.ndarray,
+    discontinuation_cycle: np.ndarray,
+    retention_profile: tuple[float, ...],
+) -> np.ndarray:
+    intervention_week12 = np.asarray(intervention_week12_mmd, dtype=float)
+    comparator_week12 = np.asarray(comparator_week12_mmd, dtype=float)
+    result = intervention_week12.copy()
+
+    lack_efficacy = discontinuation_reason == DISC_REASON_LACK_EFFICACY
+    result[lack_efficacy] = comparator_week12[lack_efficacy]
+
+    other_reason = discontinuation_reason == DISC_REASON_OTHER
+    if np.any(other_reason):
+        cycles_since = cycle - discontinuation_cycle
+        retained = _retained_effect_fraction(cycles_since, retention_profile)
+        incremental_benefit = np.maximum(0.0, comparator_week12 - intervention_week12)
+        result[other_reason] = (
+            intervention_week12[other_reason]
+            + (1.0 - retained[other_reason]) * incremental_benefit[other_reason]
+        )
+    return np.clip(result, MMD_MIN, MMD_MAX)
+
+
+def _patient_level_maintenance_acute_days(
+    inputs: ModelInputs,
+    cycle: int,
+    discontinuation_reason: np.ndarray,
+    discontinuation_cycle: np.ndarray,
+    retention_profile: tuple[float, ...],
+) -> np.ndarray:
+    intervention_week12 = acute_medication_day_value(inputs, inputs.intervention_arm, "week12")
+    comparator_week12 = acute_medication_day_value(inputs, inputs.comparator_arm, "week12")
+    result = np.full(discontinuation_reason.shape, intervention_week12, dtype=float)
+
+    lack_efficacy = discontinuation_reason == DISC_REASON_LACK_EFFICACY
+    result[lack_efficacy] = comparator_week12
+
+    other_reason = discontinuation_reason == DISC_REASON_OTHER
+    if np.any(other_reason):
+        cycles_since = cycle - discontinuation_cycle
+        retained = _retained_effect_fraction(cycles_since, retention_profile)
+        incremental_benefit = max(0.0, comparator_week12 - intervention_week12)
+        result[other_reason] = intervention_week12 + (1.0 - retained[other_reason]) * incremental_benefit
+    return np.clip(result, 0.0, None)
 
 
 def _cycle_mmd(
@@ -132,8 +184,9 @@ def _cycle_mmd(
     week12_mmd: np.ndarray,
     overrides: dict[str, Any] | None,
     comparator_week12_mmd: np.ndarray | None = None,
-    p_short: float = 0.0,
-    p_long: float = 0.0,
+    discontinuation_reason: np.ndarray | None = None,
+    discontinuation_cycle: np.ndarray | None = None,
+    retention_profile: tuple[float, ...] = (),
 ) -> np.ndarray:
     if cycle == 1:
         start = _timepoint_mmd(inputs, arm, baseline_mmd, week12_mmd, "baseline", overrides)
@@ -147,9 +200,20 @@ def _cycle_mmd(
         start = _timepoint_mmd(inputs, arm, baseline_mmd, week12_mmd, "week8", overrides)
         end = week12_mmd
         return np.clip((start + end) / 2.0, MMD_MIN, MMD_MAX)
-    if arm == inputs.intervention_arm and comparator_week12_mmd is not None:
-        q = _maintenance_decay_fraction(cycle - inputs.decision_tree_cycles, p_short, p_long)
-        return np.clip(week12_mmd + q * (comparator_week12_mmd - week12_mmd), MMD_MIN, MMD_MAX)
+    if (
+        arm == inputs.intervention_arm
+        and comparator_week12_mmd is not None
+        and discontinuation_reason is not None
+        and discontinuation_cycle is not None
+    ):
+        return _patient_level_maintenance_mmd(
+            week12_mmd,
+            comparator_week12_mmd,
+            cycle,
+            discontinuation_reason,
+            discontinuation_cycle,
+            retention_profile,
+        )
     return week12_mmd
 
 
@@ -165,16 +229,25 @@ def _simulate_arm(
     n = settings.n_patients
     week12_mmd = calibration.week12_mmd
     utility_overrides = _utility_overrides(overrides)
-    rng = np.random.default_rng(settings.seed + (101 if arm == inputs.intervention_arm else 202))
+    discontinuation_rng = np.random.default_rng(settings.seed + (101 if arm == inputs.intervention_arm else 202))
+    reason_rng = np.random.default_rng(settings.seed + (303 if arm == inputs.intervention_arm else 404))
 
     is_intervention = arm == inputs.intervention_arm
     on_treatment = np.ones(n, dtype=bool) if is_intervention else np.zeros(n, dtype=bool)
+    discontinuation_reason = np.zeros(n, dtype=np.int8)
+    discontinuation_cycle = np.full(n, -1, dtype=np.int16)
     price = erenumab_price_per_cycle(inputs, overrides)
     acute_cost_day = acute_medication_cost_per_day(inputs, overrides)
     non_drug_cost = non_drug_medical_service_cost_per_cycle(inputs, overrides)
     discontinuation_cfg = inputs.config["discontinuation"]
     p_short = discontinuation_cycle_probability(inputs, str(discontinuation_cfg["short_term_rule"]), overrides)
-    p_long = discontinuation_cycle_probability(inputs, str(discontinuation_cfg["maintenance_rule"]), overrides)
+    p_maintenance = discontinuation_cycle_probability(
+        inputs, str(discontinuation_cfg["maintenance_rule"]), overrides
+    )
+    lack_efficacy_share = discontinuation_probability_value(
+        inputs, str(discontinuation_cfg["lack_efficacy_share_rule"]), overrides
+    )
+    retention_profile = _retention_profile(inputs, overrides)
 
     total_drug_cost = 0.0
     total_acute_cost = 0.0
@@ -193,12 +266,23 @@ def _simulate_arm(
             week12_mmd,
             overrides,
             comparator_week12_mmd=comparator_week12_mmd,
-            p_short=p_short,
-            p_long=p_long,
+            discontinuation_reason=discontinuation_reason,
+            discontinuation_cycle=discontinuation_cycle,
+            retention_profile=retention_profile,
         )
         utilities = utilities_from_mmd(cycle_mmd, inputs.mmd_states, utility_overrides)
         qaly = float(np.mean(utilities) * inputs.cycle_length_weeks / 52.0)
-        acute_days = _acute_days_for_cycle_with_decay(inputs, arm, cycle, p_short, p_long)
+        if is_intervention and cycle > inputs.decision_tree_cycles:
+            acute_days_by_patient = _patient_level_maintenance_acute_days(
+                inputs,
+                cycle,
+                discontinuation_reason,
+                discontinuation_cycle,
+                retention_profile,
+            )
+            acute_days = float(np.mean(acute_days_by_patient))
+        else:
+            acute_days = _acute_days_for_cycle(inputs, arm, cycle)
         acute_cost = float(acute_days * acute_cost_day)
         cycle_non_drug_cost = float(non_drug_cost)
         if is_intervention:
@@ -215,6 +299,16 @@ def _simulate_arm(
         total_non_drug_cost += cycle_non_drug_cost
         total_qaly += qaly
 
+        other_reason = discontinuation_reason == DISC_REASON_OTHER
+        if cycle <= inputs.decision_tree_cycles:
+            mean_retention_other = np.nan
+        elif np.any(other_reason):
+            cycles_since = cycle - discontinuation_cycle
+            retained = _retained_effect_fraction(cycles_since, retention_profile)
+            mean_retention_other = float(np.mean(retained[other_reason]))
+        else:
+            mean_retention_other = 0.0
+
         row: dict[str, float | str | int] = {
             "arm": arm,
             "cycle": cycle,
@@ -225,18 +319,37 @@ def _simulate_arm(
             "qaly": qaly,
             "acute_medication_days": acute_days,
             "erenumab_on_treatment_rate": dose_rate,
+            "discontinued_lack_efficacy_rate_start": float(
+                np.mean(discontinuation_reason == DISC_REASON_LACK_EFFICACY)
+            ),
+            "discontinued_other_reason_rate_start": float(np.mean(other_reason)),
+            "mean_retained_effect_fraction_other_discontinuers": mean_retention_other,
             "erenumab_drug_cost": drug_cost,
             "acute_rescue_medication_cost": acute_cost,
             "non_drug_medical_service_cost": cycle_non_drug_cost,
             "total_cost": total_cycle_cost,
         }
         row.update(state_share_table(cycle_mmd, inputs.mmd_states))
-        trace.append(row)
 
+        newly_discontinued = np.zeros(n, dtype=bool)
+        at_risk_count = int(np.sum(on_treatment)) if is_intervention else 0
         if is_intervention:
-            p_disc = p_short if cycle <= inputs.decision_tree_cycles else p_long
-            discontinuations = rng.random(n) < p_disc
-            on_treatment = on_treatment & (~discontinuations)
+            p_disc = p_short if cycle <= inputs.decision_tree_cycles else p_maintenance
+            newly_discontinued = on_treatment & (discontinuation_rng.random(n) < p_disc)
+            reason_draws = reason_rng.random(n)
+            if np.any(newly_discontinued):
+                lack_efficacy = newly_discontinued & (reason_draws < lack_efficacy_share)
+                other = newly_discontinued & (~lack_efficacy)
+                discontinuation_reason[lack_efficacy] = DISC_REASON_LACK_EFFICACY
+                discontinuation_reason[other] = DISC_REASON_OTHER
+                discontinuation_cycle[newly_discontinued] = cycle
+                on_treatment[newly_discontinued] = False
+        row["new_discontinuation_rate_population_end"] = float(np.mean(newly_discontinued))
+        row["new_discontinuation_rate_at_risk_end"] = (
+            float(np.sum(newly_discontinued) / at_risk_count) if at_risk_count else 0.0
+        )
+        row["erenumab_on_treatment_rate_end"] = float(np.mean(on_treatment)) if is_intervention else 0.0
+        trace.append(row)
 
     total_cost = total_drug_cost + total_acute_cost + total_non_drug_cost
     summary = {
@@ -251,6 +364,13 @@ def _simulate_arm(
         "week12_mean_mmd": calibration.mean_mmd_week12,
         "week12_responder50": calibration.responder50_week12,
         "week12_mmd_lt15": calibration.mmd_lt15_week12,
+        "end_horizon_on_treatment_rate": float(np.mean(on_treatment)) if is_intervention else 0.0,
+        "end_horizon_discontinued_lack_efficacy_rate": float(
+            np.mean(discontinuation_reason == DISC_REASON_LACK_EFFICACY)
+        ) if is_intervention else 0.0,
+        "end_horizon_discontinued_other_reason_rate": float(
+            np.mean(discontinuation_reason == DISC_REASON_OTHER)
+        ) if is_intervention else 0.0,
     }
     return summary, trace
 
@@ -259,23 +379,36 @@ def run_basecase_simulation(
     inputs: ModelInputs,
     settings: SimulationSettings,
     overrides: dict[str, Any] | None = None,
+    calibration_results_override: dict[str, CalibrationResult] | None = None,
 ) -> SimulationOutput:
     baseline = _baseline_mmd(inputs, settings, overrides)
-    calibration_results: dict[str, CalibrationResult] = {}
-    for idx, arm in enumerate([inputs.intervention_arm, inputs.comparator_arm]):
-        if settings.calibration_mode == "frozen" and frozen_calibration_available(inputs):
-            calibration_results[arm] = apply_frozen_calibration(inputs, arm, baseline, overrides)
-        elif settings.calibration_mode in {"recalibrate", "frozen"}:
-            rng = np.random.default_rng(settings.seed + 1000 + idx)
-            calibration_results[arm] = calibrate_week12_distribution(
-                inputs,
-                arm,
-                baseline,
-                rng,
-                overrides,
-            )
-        else:
-            raise ValueError(f"Unknown calibration_mode: {settings.calibration_mode}")
+    if calibration_results_override is not None:
+        calibration_results = dict(calibration_results_override)
+        expected_arms = {inputs.intervention_arm, inputs.comparator_arm}
+        if set(calibration_results) != expected_arms:
+            raise ValueError("Calibration override must provide both model arms")
+        for arm, result in calibration_results.items():
+            if len(result.week12_mmd) != len(baseline):
+                raise ValueError(
+                    f"Calibration override for {arm} has {len(result.week12_mmd)} patients; "
+                    f"expected {len(baseline)}"
+                )
+    else:
+        calibration_results = {}
+        for idx, arm in enumerate([inputs.intervention_arm, inputs.comparator_arm]):
+            if settings.calibration_mode == "frozen" and frozen_calibration_available(inputs):
+                calibration_results[arm] = apply_frozen_calibration(inputs, arm, baseline, overrides)
+            elif settings.calibration_mode in {"recalibrate", "frozen"}:
+                rng = np.random.default_rng(settings.seed + 1000 + idx)
+                calibration_results[arm] = calibrate_week12_distribution(
+                    inputs,
+                    arm,
+                    baseline,
+                    rng,
+                    overrides,
+                )
+            else:
+                raise ValueError(f"Unknown calibration_mode: {settings.calibration_mode}")
 
     summaries = []
     trace_rows: list[dict[str, float | str | int]] = []
@@ -325,6 +458,13 @@ def run_basecase_simulation(
         "week12_mean_mmd": float(intervention["week12_mean_mmd"] - comparator["week12_mean_mmd"]),
         "week12_responder50": float(intervention["week12_responder50"] - comparator["week12_responder50"]),
         "week12_mmd_lt15": float(intervention["week12_mmd_lt15"] - comparator["week12_mmd_lt15"]),
+        "end_horizon_on_treatment_rate": float(intervention["end_horizon_on_treatment_rate"]),
+        "end_horizon_discontinued_lack_efficacy_rate": float(
+            intervention["end_horizon_discontinued_lack_efficacy_rate"]
+        ),
+        "end_horizon_discontinued_other_reason_rate": float(
+            intervention["end_horizon_discontinued_other_reason_rate"]
+        ),
         "icer_cny_per_qaly": icer,
         "nmb_1x_gdp_cny": np.nan,
         "nmb_3x_gdp_cny": np.nan,
