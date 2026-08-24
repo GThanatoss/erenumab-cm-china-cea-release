@@ -107,25 +107,7 @@ def run_time_horizon_scenarios(
     results.insert(1, "scenario_name", "12-week time horizon")
     results.insert(2, "time_horizon_weeks", inputs.decision_tree_cycles * inputs.cycle_length_weeks)
     results.insert(3, "total_cycles", inputs.decision_tree_cycles)
-
-    immediate_settings = SimulationSettings(
-        n_patients=n_patients,
-        seed=seed,
-        scenario_id="immediate_post_discontinuation_loss",
-        calibration_mode=calibration_mode,
-    )
-    immediate_output = run_basecase_simulation(
-        inputs,
-        immediate_settings,
-        overrides={"_retention_profile": []},
-    )
-    immediate_results = immediate_output.results.copy()
-    immediate_results.insert(0, "scenario_id", "immediate_post_discontinuation_loss")
-    immediate_results.insert(1, "scenario_name", "Immediate post-discontinuation loss of incremental benefit")
-    immediate_results.insert(2, "time_horizon_weeks", inputs.time_horizon_weeks)
-    immediate_results.insert(3, "total_cycles", inputs.total_cycles)
-
-    return pd.concat([results, immediate_results], ignore_index=True)
+    return results
 
 
 def _calibration_draw_seed(inputs: ModelInputs, arm: str) -> int:
@@ -451,7 +433,7 @@ def build_owsa_specs(inputs: ModelInputs) -> list[OWSASpec]:
     discontinuation_cfg = inputs.config["discontinuation"]
     for parameter_id, name_cn in [
         (str(discontinuation_cfg["short_term_rule"]), "0-12 week double-blind all-cause discontinuation rate"),
-        (str(discontinuation_cfg["maintenance_rule"]), "52-week open-label treatment discontinuation rate"),
+        (str(discontinuation_cfg["maintenance_rule"]), "52-week open-label treatment discontinuation probability"),
         (
             str(discontinuation_cfg["lack_efficacy_share_rule"]),
             "Conditional share of discontinuations due to lack of efficacy",

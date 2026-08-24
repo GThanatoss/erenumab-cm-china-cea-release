@@ -74,7 +74,7 @@ class PublicDataTests(unittest.TestCase):
         )
         self.assertEqual(
             set(scenarios["scenario_id"]),
-            {"12_week_time_horizon", "immediate_post_discontinuation_loss"},
+            {"12_week_time_horizon"},
         )
 
 

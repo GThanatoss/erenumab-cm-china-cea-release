@@ -98,7 +98,7 @@ class PatientLevelExtrapolationTests(unittest.TestCase):
         )
         self.assertAlmostEqual(lack / (lack + other), 39.0 / 139.0, delta=0.03)
 
-    def test_immediate_loss_scenario_does_not_increase_qalys(self) -> None:
+    def test_generic_empty_retention_profile_override_does_not_increase_qalys(self) -> None:
         settings = SimulationSettings(n_patients=5000, seed=314159)
         basecase = run_basecase_simulation(self.inputs, settings)
         immediate = run_basecase_simulation(

@@ -85,7 +85,7 @@ One-way sensitivity analysis varies model parameters over predefined ranges and 
 
 PSA samples clinical probabilities and utilities from beta or beta-PERT distributions, costs from gamma distributions where applicable, and MMD change from normal distributions. The erenumab price is sampled from a gamma distribution with mean CNY 3,498 per 70 mg box. Its dispersion is derived from an assumed uncertainty range of CNY 2,798.4 to CNY 4,197.6 (plus or minus 20% of the base-case price); this assumption is not a statistical confidence interval. Utility sampling is sorted within each PSA iteration to preserve monotonicity across MMD states.
 
-The 52-week treatment-discontinuation probability and the conditional lack-of-efficacy share are included in OWSA and PSA using the observed counts from the open-label study. The retained-effect profile is treated as structural uncertainty rather than assigned an unsupported probability distribution.
+The 52-week treatment-discontinuation probability and the conditional lack-of-efficacy share are included in OWSA and PSA using the observed counts from the open-label study. The retained-effect profile is held fixed as a base-case structural assumption rather than assigned an unsupported probability distribution.
 
 A separate calibration robustness analysis across prespecified target weights evaluates whether the economic conclusion depends on how strongly the secondary MMD<15 target influences calibration. It uses the base-case two-component continuous distribution, parameter bounds, primary targets, patient cohort, extrapolation, costing, and utility mapping. The MMD<15 objective weight is varied over the prespecified values 0, 0.15, 0.3, 0.6, 1.2, 2.4, and 4.8. Each candidate calibration is fitted using common random numbers and evaluated on the common base-case cohort. Candidate pairs are classified as compatible with the primary evidence when both arm-specific mean-MMD residuals are within 0.5 days and both responder-rate residuals are within 0.03. MMD<15 is reported but is not used as an acceptance criterion because of the endpoint-definition mismatch.
 
@@ -94,7 +94,6 @@ The calibration robustness analysis reports the observed minimum and maximum inc
 Scenario analyses include:
 
 - 12-week time horizon.
-- Immediate post-discontinuation loss of positive incremental benefit.
 - Threshold erenumab price at 1x and 3x GDP per capita willingness-to-pay thresholds.
 
 ## Outputs
