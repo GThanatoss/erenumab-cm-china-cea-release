@@ -47,7 +47,7 @@ The command below runs the base case, calibration robustness analysis across pre
 python run_model.py --analysis all --psa-iterations 1000 --psa-workers 16 --calibration-mode frozen --language en --output-dir results
 ```
 
-**Example resource use:** On a 13th Gen Intel Core i7-13700 with approximately 32 GiB RAM, Windows 11, and Python 3.12.4, the full command above (default seed 314159, 16 PSA workers, and 10,000 patients per PSA iteration) took approximately 7 min 56 s; the 1,000-iteration PSA step took approximately 69 s. The peak sampled sum of the main and child process working sets across the full command was approximately 2.35 GiB (0.5-second sampling; shared pages may be counted more than once). This was one run at below-normal process priority while the computer was in use; requirements vary with hardware, software, and system load.
+**Example resource use:** On a 13th Gen Intel Core i7-13700 with approximately 32 GiB RAM, Windows 11, and Python 3.12.4, the full command above (default seed 314159, 16 PSA workers, and 10,000 patients per PSA iteration) took approximately 5 min 52 s; the 1,000-iteration PSA step took approximately 62 s. The peak sampled sum of the main and child process working sets across the full command was approximately 2.35 GiB (0.5-second sampling; shared pages may be counted more than once). This was one run at below-normal process priority while the computer was in use; requirements vary with hardware, software, and system load.
 
 Outputs are written to:
 
